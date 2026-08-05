@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+title: "Minority Prophet Gate: evidence-root aggregation for multi-agent consensus"
+authors:
+  - family-names: "He"
+    given-names: "James Siyuan"
+    alias: "Silentpartnercoding"
+version: 0.1.1
+date-released: 2026-08-04
+repository-code: "https://github.com/Silentpartnercoding/minority-prophet-gate"
+message: "If you use this software, please cite it. Research paper draft in the minority-prophet repository."

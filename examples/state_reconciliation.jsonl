@@ -1,0 +1,7 @@
+{"claim_id":"s1","component":"runner-start-event","assertion":"running","attest":{"origin":"evt-start-8812","sig":"demo","observed_at_age_s":7200}}
+{"claim_id":"s2","component":"job-ledger","assertion":"running","attest":{"origin":"evt-start-8812","derived_from":"s1","sig":"demo"}}
+{"claim_id":"s3","component":"status-board","assertion":"running","attest":{"origin":"evt-start-8812","derived_from":"s2","sig":"demo"}}
+{"claim_id":"s4","component":"chat-notifier","assertion":"running","attest":{"origin":"evt-start-8812","derived_from":"s3","sig":"demo"}}
+{"claim_id":"s5","component":"retry-queue-snapshot","assertion":"queued","attest":{"origin":"snap-2201","sig":"demo","observed_at_age_s":5400}}
+{"claim_id":"s6","component":"process-table-probe","assertion":"exited","attest":{"origin":"probe-ps-0042","sig":"demo","observed_at_age_s":2}}
+{"claim_id":"s7","component":"pid-liveness-probe","assertion":"exited","attest":{"origin":"probe-pid-0043","sig":"demo","observed_at_age_s":3}}

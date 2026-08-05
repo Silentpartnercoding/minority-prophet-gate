@@ -1,0 +1,206 @@
+[
+ {
+  "name": "single_root",
+  "claims": [
+   {
+    "id": "a",
+    "assertion": 1
+   }
+  ],
+  "expected_decision": 1
+ },
+ {
+  "name": "tie_abstains",
+  "claims": [
+   {
+    "id": "a",
+    "assertion": 0
+   },
+   {
+    "id": "b",
+    "assertion": 1
+   }
+  ],
+  "expected_decision": null
+ },
+ {
+  "name": "copies_dont_count",
+  "claims": [
+   {
+    "id": "a",
+    "assertion": 0
+   },
+   {
+    "id": "b",
+    "assertion": 0
+   },
+   {
+    "id": "o",
+    "assertion": 1
+   },
+   {
+    "id": "c0",
+    "assertion": 1,
+    "parent": "o"
+   },
+   {
+    "id": "c1",
+    "assertion": 1,
+    "parent": "c0"
+   },
+   {
+    "id": "c2",
+    "assertion": 1,
+    "parent": "c1"
+   },
+   {
+    "id": "c3",
+    "assertion": 1,
+    "parent": "c2"
+   },
+   {
+    "id": "c4",
+    "assertion": 1,
+    "parent": "c3"
+   },
+   {
+    "id": "c5",
+    "assertion": 1,
+    "parent": "c4"
+   },
+   {
+    "id": "c6",
+    "assertion": 1,
+    "parent": "c5"
+   },
+   {
+    "id": "c7",
+    "assertion": 1,
+    "parent": "c6"
+   },
+   {
+    "id": "c8",
+    "assertion": 1,
+    "parent": "c7"
+   },
+   {
+    "id": "c9",
+    "assertion": 1,
+    "parent": "c8"
+   },
+   {
+    "id": "c10",
+    "assertion": 1,
+    "parent": "c9"
+   },
+   {
+    "id": "c11",
+    "assertion": 1,
+    "parent": "c10"
+   },
+   {
+    "id": "c12",
+    "assertion": 1,
+    "parent": "c11"
+   },
+   {
+    "id": "c13",
+    "assertion": 1,
+    "parent": "c12"
+   },
+   {
+    "id": "c14",
+    "assertion": 1,
+    "parent": "c13"
+   },
+   {
+    "id": "c15",
+    "assertion": 1,
+    "parent": "c14"
+   },
+   {
+    "id": "c16",
+    "assertion": 1,
+    "parent": "c15"
+   },
+   {
+    "id": "c17",
+    "assertion": 1,
+    "parent": "c16"
+   },
+   {
+    "id": "c18",
+    "assertion": 1,
+    "parent": "c17"
+   },
+   {
+    "id": "c19",
+    "assertion": 1,
+    "parent": "c18"
+   }
+  ],
+  "expected_decision": 0
+ },
+ {
+  "name": "two_indep_beat_one",
+  "claims": [
+   {
+    "id": "x",
+    "assertion": 1
+   },
+   {
+    "id": "y",
+    "assertion": 1
+   },
+   {
+    "id": "z",
+    "assertion": 0
+   }
+  ],
+  "expected_decision": 1
+ },
+ {
+  "name": "abstain_margin_filters_thin",
+  "claims": [
+   {
+    "id": "a",
+    "assertion": 0
+   },
+   {
+    "id": "b",
+    "assertion": 1
+   },
+   {
+    "id": "c",
+    "assertion": 1
+   }
+  ],
+  "abstain_margin": 0.4,
+  "expected_decision": null
+ },
+ {
+  "name": "chain_one_root_vs_root",
+  "claims": [
+   {
+    "id": "r1",
+    "assertion": 1,
+    "parent": null
+   },
+   {
+    "id": "r2",
+    "assertion": 1,
+    "parent": "r1"
+   },
+   {
+    "id": "r3",
+    "assertion": 1,
+    "parent": "r2"
+   },
+   {
+    "id": "q",
+    "assertion": 0
+   }
+  ],
+  "expected_decision": null
+ }
+]

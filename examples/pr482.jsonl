@@ -1,0 +1,9 @@
+{"claim_id":"c1","agent":"claude-qa","assertion":"UNSAFE","attest":{"origin":"test-9a41","sig":"attestation:demo"}}
+{"claim_id":"c2","agent":"claude-sec","assertion":"SAFE","attest":{"origin":"scan-7f2c","sig":"attestation:demo"}}
+{"claim_id":"c3","agent":"claude-writer","assertion":"SAFE","attest":{"origin":"scan-7f2c","derived_from":"c2","sig":"attestation:demo"}}
+{"claim_id":"c4","agent":"dashboard-bot","assertion":"SAFE","attest":{"origin":"scan-7f2c","derived_from":"c3","sig":"attestation:demo"}}
+{"claim_id":"c5","agent":"retry-loop","assertion":"SAFE","attest":{"origin":"scan-7f2c","derived_from":"c2","sig":"attestation:demo"}}
+{"claim_id":"c6","agent":"quoter-1","assertion":"SAFE","attest":{"origin":"scan-7f2c","derived_from":"c3","sig":"attestation:demo"}}
+{"claim_id":"c7","agent":"quoter-2","assertion":"SAFE","attest":{"origin":"scan-7f2c","derived_from":"c4","sig":"attestation:demo"}}
+{"claim_id":"c8","agent":"slack-mirror","assertion":"SAFE","attest":{"origin":"scan-7f2c","derived_from":"c3","sig":"attestation:demo"}}
+{"claim_id":"c9","agent":"claude-qa","assertion":"UNSAFE","attest":{"origin":"test-b830","sig":"attestation:demo"}}
