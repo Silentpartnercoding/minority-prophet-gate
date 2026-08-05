@@ -7,7 +7,7 @@ side-preserving lineage corruption, and the margin flip condition.
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
 from .reconcile import StateVerdict, reconcile
 from .adapter_acp import AttestationVerifier, TrustAllVerifier, envelopes_to_claims
-from .gate import GateDecision, decide
+from .gate import EvidenceAssessment, GateDecision, assess, decide
 from .runtime_adapter import (
     RuntimeAction,
     RuntimeAdapter,
@@ -21,7 +21,7 @@ __version__ = "0.1.0"
 __all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
            "StateVerdict", "reconcile",
            "AttestationVerifier", "TrustAllVerifier", "envelopes_to_claims",
-           "GateDecision", "decide",
+           "EvidenceAssessment", "GateDecision", "assess", "decide",
            "RuntimeAction", "RuntimeAdapter", "RuntimeBoundaryError",
            "RuntimeController", "RuntimeReceipt",
            "IdempotentHttpRuntime", "InProcessToolRuntime"]

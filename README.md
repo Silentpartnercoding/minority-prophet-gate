@@ -53,6 +53,11 @@ Replace the one line in your orchestrator that says
 come back: `proceed`, `block`, or `escalate` (abstention / thin margin /
 no verifiable evidence — a reason to ask a human, never a reason to proceed).
 
+For belief formation, analysis, or any use that must not imply execution,
+call `assess()` instead. It returns an action-neutral evidence verdict and
+flip budget. `decide()` is the separate policy layer that interprets that
+assessment as `proceed`, `block`, or `escalate`.
+
 ## Security model — read this before trusting anything
 
 `TrustAllVerifier` is for **testing only**. The guarantees above are
