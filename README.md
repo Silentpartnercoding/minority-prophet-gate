@@ -113,6 +113,13 @@ observation time under a freshness policy is excluded conservatively.
 
 ## Status
 
+Two reference runtime integrations exercise the neutral boundary: an
+allowlisted in-process tool adapter and an idempotent HTTP adapter. Both bind
+the exact payload digest and idempotency key. The HTTP target and any
+in-process handler must persist idempotency outcomes to provide crash-safe
+exactly-once effects; the reference controller's in-memory ledger alone does
+not provide that production guarantee.
+
 `v0.1.1` — reference implementation. Aggregator core is conformance-tested
 against spec-derived vectors and backed by exhaustively machine-checked
 theorems; the ACP adapter and gate policy are new and seeking adversarial
@@ -129,6 +136,7 @@ minority_prophet/adapter_acp.py  # envelopes -> verified Claims (security model 
 minority_prophet/gate.py         # decide(): proceed / block / escalate + flip_budget
 minority_prophet/reconcile.py    # reconcile(): many status sources, one state
 minority_prophet/runtime_adapter.py # neutral prepare/execute-once/prevent boundary
+minority_prophet/runtime_integrations.py # in-process and idempotent HTTP adapters
 examples/pr482.jsonl           # the 9-message scenario from the paper
 tests/                         # unit + end-to-end attack tests + conformance vectors
 ```

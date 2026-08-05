@@ -15,6 +15,7 @@ from .runtime_adapter import (
     RuntimeController,
     RuntimeReceipt,
 )
+from .runtime_integrations import IdempotentHttpRuntime, InProcessToolRuntime
 
 __version__ = "0.1.0"
 __all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
@@ -22,4 +23,5 @@ __all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
            "AttestationVerifier", "TrustAllVerifier", "envelopes_to_claims",
            "GateDecision", "decide",
            "RuntimeAction", "RuntimeAdapter", "RuntimeBoundaryError",
-           "RuntimeController", "RuntimeReceipt"]
+           "RuntimeController", "RuntimeReceipt",
+           "IdempotentHttpRuntime", "InProcessToolRuntime"]
