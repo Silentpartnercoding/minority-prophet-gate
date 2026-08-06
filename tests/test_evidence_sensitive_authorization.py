@@ -52,6 +52,23 @@ class EvidenceSensitiveAuthorizationTests(unittest.TestCase):
         self.assertEqual(result["runtime_receipt"]["attempt_count"], 1)
         self.assertEqual(result["effects_executed"], 1)
 
+    def test_tough_case_beats_voice_based_trust_measures(self):
+        result = MODULE.benchmark_trust_measures()
+
+        self.assertEqual(result["known_correct_action"], "UNSAFE")
+        self.assertEqual(result["measures"], {
+            "head_count": "SAFE",
+            "verified_identity_or_signature": "SAFE",
+            "signature_plus_subject_plus_freshness": "SAFE",
+            "independent_evidence_roots": "UNSAFE",
+        })
+        self.assertEqual(result["details"]["voices"], {"safe": 12, "unsafe": 3})
+        self.assertEqual(
+            result["details"]["independent_roots"], {"safe": 2, "unsafe": 3}
+        )
+        self.assertEqual(result["root_measure_authority_decision"], "block")
+        self.assertEqual(result["root_measure_effects_executed"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

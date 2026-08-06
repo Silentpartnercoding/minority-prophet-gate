@@ -77,6 +77,15 @@ interprets that assessment, and the runtime independently enforces the
 result. Run it from the repository root with
 `python -m examples.evidence_sensitive_authorization`.
 
+The same runnable example includes a harder comparison. Twelve SAFE voices
+include six copies, two invalid forgeries, one expired observation, one claim
+bound to the wrong action, and two valid independent roots. Three fresh,
+bound, independently grounded UNSAFE roots oppose them. Head count, signature
+checking alone, and signature-plus-subject-plus-freshness still choose SAFE;
+independent-root assessment chooses UNSAFE and the runtime executes zero
+effects. This is an illustrative adversarial case, not a population-level
+accuracy benchmark.
+
 ## Security model — read this before trusting anything
 
 `TrustAllVerifier` is for **testing only**. The guarantees above are
