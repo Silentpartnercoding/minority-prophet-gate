@@ -58,6 +58,25 @@ call `assess()` instead. It returns an action-neutral evidence verdict and
 flip budget. `decide()` is the separate policy layer that interprets that
 assessment as `proceed`, `block`, or `escalate`.
 
+### Evidence-sensitive authorization example
+
+`examples/evidence_sensitive_authorization.py` demonstrates the narrow case
+where this assessment adds information that ordinary authorization does not:
+seven agents approve a production deployment, but all seven copied one scan;
+two independent test runs reject it. The example produces this flow:
+
+```
+9 voices -> Minority Prophet assessment (1 SAFE root, 2 UNSAFE roots)
+         -> separate authority policy (BLOCK)
+         -> exact-action runtime boundary (0 effects)
+```
+
+Minority Prophet does not grant authority in this example. It reports the
+structure and strength of the evidence. A separate provider-owned policy
+interprets that assessment, and the runtime independently enforces the
+result. Run it from the repository root with
+`python -m examples.evidence_sensitive_authorization`.
+
 ## Security model — read this before trusting anything
 
 `TrustAllVerifier` is for **testing only**. The guarantees above are
