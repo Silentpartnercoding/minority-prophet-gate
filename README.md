@@ -58,6 +58,34 @@ call `assess()` instead. It returns an action-neutral evidence verdict and
 flip budget. `decide()` is the separate policy layer that interprets that
 assessment as `proceed`, `block`, or `escalate`.
 
+### Evidence-sensitive authorization example
+
+`examples/evidence_sensitive_authorization.py` demonstrates the narrow case
+where this assessment adds information that ordinary authorization does not:
+seven agents approve a production deployment, but all seven copied one scan;
+two independent test runs reject it. The example produces this flow:
+
+```
+9 voices -> Minority Prophet assessment (1 SAFE root, 2 UNSAFE roots)
+         -> separate authority policy (BLOCK)
+         -> exact-action runtime boundary (0 effects)
+```
+
+Minority Prophet does not grant authority in this example. It reports the
+structure and strength of the evidence. A separate provider-owned policy
+interprets that assessment, and the runtime independently enforces the
+result. Run it from the repository root with
+`python -m examples.evidence_sensitive_authorization`.
+
+The same runnable example includes a harder comparison. Twelve SAFE voices
+include six copies, two invalid forgeries, one expired observation, one claim
+bound to the wrong action, and two valid independent roots. Three fresh,
+bound, independently grounded UNSAFE roots oppose them. Head count, signature
+checking alone, and signature-plus-subject-plus-freshness still choose SAFE;
+independent-root assessment chooses UNSAFE and the runtime executes zero
+effects. This is an illustrative adversarial case, not a population-level
+accuracy benchmark.
+
 ## Security model — read this before trusting anything
 
 `TrustAllVerifier` is for **testing only**. The guarantees above are
@@ -117,6 +145,18 @@ never outrank a root. Freshness applies to roots only; a root without an
 observation time under a freshness policy is excluded conservatively.
 
 ## Status
+
+## Selective decision ladder
+
+`selective_decide` keeps explicit deterministic policy primary. Clear allows
+and denies do not invoke the provenance challenger. Only an action marked
+evidence-sensitive (or returned as `review`) enters independent-root
+assessment. Contradictory evidence blocks; balanced, missing, or thin evidence
+escalates to a separately authorized human. Escalation is not permission, and
+evidence cannot override a deterministic deny.
+
+This routing contract is an execution-safety policy, not a claim that the
+provenance method is globally more accurate than ordinary authorization rules.
 
 Two reference runtime integrations exercise the neutral boundary: an
 allowlisted in-process tool adapter and an idempotent HTTP adapter. Both bind
