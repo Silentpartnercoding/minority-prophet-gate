@@ -16,6 +16,7 @@ from .runtime_adapter import (
     RuntimeReceipt,
 )
 from .runtime_integrations import IdempotentHttpRuntime, InProcessToolRuntime
+from .selective_hybrid import DeterministicDecision, SelectiveDecision, selective_decide
 
 __version__ = "0.1.0"
 __all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
@@ -24,4 +25,5 @@ __all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
            "EvidenceAssessment", "GateDecision", "assess", "decide",
            "RuntimeAction", "RuntimeAdapter", "RuntimeBoundaryError",
            "RuntimeController", "RuntimeReceipt",
-           "IdempotentHttpRuntime", "InProcessToolRuntime"]
+           "IdempotentHttpRuntime", "InProcessToolRuntime",
+           "DeterministicDecision", "SelectiveDecision", "selective_decide"]

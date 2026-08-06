@@ -146,6 +146,18 @@ observation time under a freshness policy is excluded conservatively.
 
 ## Status
 
+## Selective decision ladder
+
+`selective_decide` keeps explicit deterministic policy primary. Clear allows
+and denies do not invoke the provenance challenger. Only an action marked
+evidence-sensitive (or returned as `review`) enters independent-root
+assessment. Contradictory evidence blocks; balanced, missing, or thin evidence
+escalates to a separately authorized human. Escalation is not permission, and
+evidence cannot override a deterministic deny.
+
+This routing contract is an execution-safety policy, not a claim that the
+provenance method is globally more accurate than ordinary authorization rules.
+
 Two reference runtime integrations exercise the neutral boundary: an
 allowlisted in-process tool adapter and an idempotent HTTP adapter. Both bind
 the exact payload digest and idempotency key. The HTTP target and any
