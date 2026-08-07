@@ -31,8 +31,10 @@ class TestConfigurationInvariants(unittest.TestCase):
         readme = (Path(__file__).parents[1] / "README.md").read_text()
         self.assertIn("Verifier independence", readme)
         self.assertIn("not trusted merely because it is a\n   third party", readme)
-        self.assertIn("unable to\n   mint, alter, or promote the evidence it verifies", readme)
-        self.assertIn("escalates rather than\n   converting uncertainty into permission", readme)
+        self.assertIn("does **not** discover shared organizational control", readme)
+        self.assertIn("must not return `root` merely because producer and\n   verifier use different names", readme)
+        self.assertIn("escalates rather than converting uncertainty into permission", readme)
+        self.assertIn("not a\n   present implementation claim", readme)
 
     def test_bound_only_strength_is_invariant_under_migration_weight(self):
         bound = [root("a", "SAFE", subject="job:1", observed_at_age_s=0),

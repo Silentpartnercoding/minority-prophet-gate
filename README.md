@@ -104,10 +104,17 @@ Wire yours via `CallbackVerifier`. Rules the adapter enforces regardless:
 4. **Verifier independence:** a verifier is not trusted merely because it is a
    third party. Its rules must be transparent, it must remain independent of
    the evidence producer, it must expose uncertainty, and it must be unable to
-   mint, alter, or promote the evidence it verifies. Evidence produced and
-   verified inside one trust domain is correlated evidence, not an independent
-   root. If separation cannot be established, the Gate escalates rather than
-   converting uncertainty into permission.
+   mint, alter, or promote the evidence it verifies.
+
+   The current Gate consumes a verifier's `root` / `derived` / `invalid`
+   classification; it does **not** discover shared organizational control by
+   itself. Deployments must not return `root` merely because producer and
+   verifier use different names, keys, services, or labels. When an upstream
+   verifier returns `derived` or `invalid`, the Gate does not count an
+   independent root; when evidence is empty, tied, or below policy margin, it
+   escalates rather than converting uncertainty into permission. The HVI-1
+   research study defines the future control-domain experiment; it is not a
+   present implementation claim.
 
 ### Subject binding and freshness (R2.5)
 
