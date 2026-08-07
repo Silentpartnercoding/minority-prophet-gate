@@ -36,6 +36,9 @@ the [Minority Prophet research repository](https://github.com/Silentpartnercodin
 
 ## Quickstart
 
+> `TrustAllVerifier` below is an unsafe testing fixture for the bundled example.
+> It must be replaced by a fail-closed production verifier before real use.
+
 ```python
 from minority_prophet import decide, TrustAllVerifier
 import json
