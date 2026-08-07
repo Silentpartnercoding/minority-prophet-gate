@@ -7,6 +7,7 @@ theorems and T5 floor rely on.
 import os
 import sys
 import unittest
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -26,6 +27,13 @@ VERIFY = CallbackVerifier(lambda envelope: envelope["verification_status"])
 
 
 class TestConfigurationInvariants(unittest.TestCase):
+    def test_public_contract_requires_verifier_independence(self):
+        readme = (Path(__file__).parents[1] / "README.md").read_text()
+        self.assertIn("Verifier independence", readme)
+        self.assertIn("not trusted merely because it is a\n   third party", readme)
+        self.assertIn("unable to\n   mint, alter, or promote the evidence it verifies", readme)
+        self.assertIn("escalates rather than\n   converting uncertainty into permission", readme)
+
     def test_bound_only_strength_is_invariant_under_migration_weight(self):
         bound = [root("a", "SAFE", subject="job:1", observed_at_age_s=0),
                  root("b", "UNSAFE", subject="job:1", observed_at_age_s=0)]

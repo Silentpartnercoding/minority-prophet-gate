@@ -101,6 +101,14 @@ Wire yours via `CallbackVerifier`. Rules the adapter enforces regardless:
 3. **Side-consistency at signing:** assertion and origin are fused in one
    signed unit, so a claim cannot be re-labeled to the other side later.
 
+4. **Verifier independence:** a verifier is not trusted merely because it is a
+   third party. Its rules must be transparent, it must remain independent of
+   the evidence producer, it must expose uncertainty, and it must be unable to
+   mint, alter, or promote the evidence it verifies. Evidence produced and
+   verified inside one trust domain is correlated evidence, not an independent
+   root. If separation cannot be established, the Gate escalates rather than
+   converting uncertainty into permission.
+
 ### Subject binding and freshness (R2.5)
 
 For a decision about a specific subject, call `decide(...,
