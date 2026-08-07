@@ -18,8 +18,8 @@ Two trace to independent failing test runs.     Verdict: BLOCK (flip cost: 1 for
 Multi-agent consensus is currently counted by voice, and voices are free:
 copies, re-broadcasts, summaries, sybils, and conformity-injection attacks
 (e.g. MAD-Spear) all inflate agreement without adding evidence. This gate
-implements evidence-root aggregation, whose core properties are **proven**,
-not tuned:
+implements evidence-root aggregation, whose core properties are
+**machine-checked under the stated model**, not tuned:
 
 - **T2 — Copy invariance:** duplicating a claim can never change the verdict.
 - **T1 — Immunity:** given side-consistent attestations, the verdict is
@@ -191,7 +191,7 @@ result, and we will credit and publish it.
 ## Repo layout
 
 ```
-minority_prophet/aggregator.py   # proven core: Claim, EvidenceGraph, aggregate()
+minority_prophet/aggregator.py   # machine-checked core: Claim, EvidenceGraph, aggregate()
 minority_prophet/adapter_acp.py  # envelopes -> verified Claims (security model here)
 minority_prophet/gate.py         # decide(): proceed / block / escalate + flip_budget
 minority_prophet/reconcile.py    # reconcile(): many status sources, one state

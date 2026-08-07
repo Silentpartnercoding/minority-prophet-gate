@@ -1,7 +1,7 @@
 [project]
 name = "minority-prophet-gate"
 version = "0.1.1"
-description = "Refuse manufactured consensus: count attested evidence roots, not voices. Proven copy-invariant."
+description = "Refuse manufactured consensus: count attested evidence roots, not voices. Machine-checked copy invariance under the stated model."
 authors = [{name = "James Siyuan He"}]
 readme = "README.md"
 requires-python = ">=3.10"
