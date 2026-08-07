@@ -190,3 +190,8 @@ tests/                         # unit + end-to-end attack tests + conformance ve
 
 See `CITATION.cff`. Research: the minority-prophet repository (paper draft,
 proofs, benchmarks E1–E8b).
+
+## License
+
+Licensed under Apache License 2.0. See [`LICENSE`](LICENSE) and
+[`NOTICE`](NOTICE).

@@ -5,7 +5,7 @@ description = "Refuse manufactured consensus: count attested evidence roots, not
 authors = [{name = "James Siyuan He"}]
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "Apache-2.0"
 keywords = ["multi-agent", "consensus", "provenance", "attestation", "guardrail"]
 
 [project.urls]
