@@ -18,8 +18,8 @@ Two trace to independent failing test runs.     Verdict: BLOCK (flip cost: 1 for
 Multi-agent consensus is currently counted by voice, and voices are free:
 copies, re-broadcasts, summaries, sybils, and conformity-injection attacks
 (e.g. MAD-Spear) all inflate agreement without adding evidence. This gate
-implements evidence-root aggregation, whose core properties are **proven**,
-not tuned:
+implements evidence-root aggregation, whose core properties are
+**machine-checked under the stated model**, not tuned:
 
 - **T2 — Copy invariance:** duplicating a claim can never change the verdict.
 - **T1 — Immunity:** given side-consistent attestations, the verdict is
@@ -35,6 +35,9 @@ Dawid–Skene / truth-discovery baselines, and the research paper draft live in
 the [Minority Prophet research repository](https://github.com/Silentpartnercoding/minority-prophet).
 
 ## Quickstart
+
+> `TrustAllVerifier` below is an unsafe testing fixture for the bundled example.
+> It must be replaced by a fail-closed production verifier before real use.
 
 ```python
 from minority_prophet import decide, TrustAllVerifier
@@ -100,6 +103,21 @@ Wire yours via `CallbackVerifier`. Rules the adapter enforces regardless:
 2. **Zero evidence ⇒ escalate:** no verifiable roots is never a green light.
 3. **Side-consistency at signing:** assertion and origin are fused in one
    signed unit, so a claim cannot be re-labeled to the other side later.
+
+4. **Verifier independence:** a verifier is not trusted merely because it is a
+   third party. Its rules must be transparent, it must remain independent of
+   the evidence producer, it must expose uncertainty, and it must be unable to
+   mint, alter, or promote the evidence it verifies.
+
+   The current Gate consumes a verifier's `root` / `derived` / `invalid`
+   classification; it does **not** discover shared organizational control by
+   itself. Deployments must not return `root` merely because producer and
+   verifier use different names, keys, services, or labels. When an upstream
+   verifier returns `derived` or `invalid`, the Gate does not count an
+   independent root; when evidence is empty, tied, or below policy margin, it
+   escalates rather than converting uncertainty into permission. The HVI-1
+   research study defines the future control-domain experiment; it is not a
+   present implementation claim.
 
 ### Subject binding and freshness (R2.5)
 
@@ -176,7 +194,7 @@ result, and we will credit and publish it.
 ## Repo layout
 
 ```
-minority_prophet/aggregator.py   # proven core: Claim, EvidenceGraph, aggregate()
+minority_prophet/aggregator.py   # machine-checked core: Claim, EvidenceGraph, aggregate()
 minority_prophet/adapter_acp.py  # envelopes -> verified Claims (security model here)
 minority_prophet/gate.py         # decide(): proceed / block / escalate + flip_budget
 minority_prophet/reconcile.py    # reconcile(): many status sources, one state
