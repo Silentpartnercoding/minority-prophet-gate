@@ -109,6 +109,25 @@ independent-root assessment chooses UNSAFE and the runtime executes zero
 effects. This is an illustrative adversarial case, not a population-level
 accuracy benchmark.
 
+### Optional memory-evidence socket
+
+Gate does not require a memory system. When an action explicitly depends on a
+remembered approval, observation, or prior event, callers may pass a neutral
+Memory Evidence Interoperability Profile to `selective_decide` together with
+the expected proposition, memory-object, request, and action digests.
+
+The consumer is deliberately asymmetric:
+
+- malformed, incomplete, unverifiable, or unknown evidence escalates;
+- revoked, expired, replayed, or incorrectly bound evidence blocks;
+- accepted memory proceeds only to the ordinary evidence assessment;
+- memory never grants authority and never overrides a deterministic denial.
+
+The neutral profile is defined in the Minority Prophet research repository.
+Identity, signature, controller, and revocation providers remain external to
+Gate. The caller must persist consumed nonces across processes if replay
+protection is required; passing an in-memory set is only a local demonstration.
+
 ## Security model — read this before trusting anything
 
 `TrustAllVerifier` is for **testing only**. The guarantees above are
