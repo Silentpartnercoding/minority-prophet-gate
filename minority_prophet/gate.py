@@ -97,6 +97,22 @@ def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
                             assessment.confidence, assessment.roots_for,
                             assessment.roots_against, assessment.diagnostics,
                             assessment.conversions_to_reverse)
+    if not assessment.diagnostics.get("immunity_applicable", True):
+        # T1's precondition does not hold on this input: some root carries both
+        # assertions, so the immunity theorem says NOTHING about this verdict --
+        # it is the absence of a guarantee, not a claim the verdict is wrong.
+        # Proceeding here would translate evidential uncertainty into permission,
+        # which is the one thing this gate exists not to do. The research
+        # reference fails closed on the same input (CE-11: resolving a conflicting
+        # root either way makes the result depend on claim order).
+        return GateDecision("escalate", assessment.verdict, assessment.flip_budget,
+                            assessment.confidence, assessment.roots_for,
+                            assessment.roots_against,
+                            dict(assessment.diagnostics,
+                                 reason="immunity precondition violated: a root "
+                                        "carries conflicting assertions (T1 gives "
+                                        "no guarantee on this input)"),
+                            assessment.conversions_to_reverse)
     if assessment.verdict == proceed_side and assessment.flip_budget >= min_flip_budget:
         action = "proceed"
         diagnostics = assessment.diagnostics
