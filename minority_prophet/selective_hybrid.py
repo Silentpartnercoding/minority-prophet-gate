@@ -12,6 +12,7 @@ from typing import Iterable, Optional
 
 from .adapter_acp import AttestationVerifier, DEFAULT_FRESHNESS
 from .gate import EvidenceAssessment, assess
+from .memory_evidence import assess_memory_evidence
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,8 @@ def selective_decide(
     decision_subject=None,
     unbound_root_weight: float = 0.0,
     freshness: Optional[dict] = DEFAULT_FRESHNESS,
+    memory_evidence: Optional[dict] = None,
+    memory_evidence_context: Optional[dict] = None,
 ) -> SelectiveDecision:
     """Apply the narrow deterministic → evidence → human ladder.
 
@@ -60,6 +63,22 @@ def selective_decide(
     if primary.action == "allow" and not primary.evidence_sensitive:
         return SelectiveDecision("proceed", "deterministic", primary.reason,
                                  diagnostics=diagnostics)
+
+    if memory_evidence is not None:
+        memory = assess_memory_evidence(
+            memory_evidence, **(memory_evidence_context or {})
+        )
+        diagnostics["memory_evidence"] = {
+            "action": memory.action,
+            "reason": memory.reason,
+            "grants_authority": False,
+        }
+        if memory.action == "block":
+            return SelectiveDecision("block", "evidence", memory.reason,
+                                     diagnostics=diagnostics)
+        if memory.action == "escalate":
+            return SelectiveDecision("escalate", "human", memory.reason,
+                                     diagnostics=diagnostics)
 
     assessment = assess(
         envelopes, verifier, decision_subject=decision_subject,
