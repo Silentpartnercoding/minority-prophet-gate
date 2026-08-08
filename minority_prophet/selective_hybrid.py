@@ -42,6 +42,7 @@ def selective_decide(
     *,
     proceed_side: int = 1,
     min_flip_budget: float = 1.0,
+    min_conversions_to_reverse: Optional[int] = None,
     decision_subject=None,
     unbound_root_weight: float = 0.0,
     freshness: Optional[dict] = DEFAULT_FRESHNESS,
@@ -52,6 +53,10 @@ def selective_decide(
     does not require evidence review. ``review`` and evidence-sensitive allows
     invoke provenance assessment. Missing, tied, or thin evidence escalates to
     a separately authorized human; it never inherits the primary allow.
+
+    ``min_flip_budget`` prices newly forged opposing root mass.
+    ``min_conversions_to_reverse`` optionally prices compromised winning roots.
+    When configured, unavailable conversion pricing fails closed to escalation.
     """
     diagnostics = {"policy_id": primary.policy_id, "primary": primary.action}
     if primary.action == "deny":
@@ -60,6 +65,12 @@ def selective_decide(
     if primary.action == "allow" and not primary.evidence_sensitive:
         return SelectiveDecision("proceed", "deterministic", primary.reason,
                                  diagnostics=diagnostics)
+
+    if (min_conversions_to_reverse is not None and
+            (isinstance(min_conversions_to_reverse, bool) or
+             not isinstance(min_conversions_to_reverse, int) or
+             min_conversions_to_reverse < 1)):
+        raise ValueError("min_conversions_to_reverse must be a positive integer or None")
 
     assessment = assess(
         envelopes, verifier, decision_subject=decision_subject,
@@ -73,8 +84,26 @@ def selective_decide(
     if assessment.flip_budget < min_flip_budget:
         return SelectiveDecision(
             "escalate", "human", "evidence margin is below policy threshold",
-            assessment, diagnostics,
+            assessment, dict(diagnostics, required_flip_budget=min_flip_budget,
+                             observed_flip_budget=assessment.flip_budget),
         )
+    if min_conversions_to_reverse is not None:
+        conversion_diagnostics = dict(
+            diagnostics,
+            required_conversions_to_reverse=min_conversions_to_reverse,
+            observed_conversions_to_reverse=assessment.conversions_to_reverse,
+        )
+        if assessment.conversions_to_reverse is None:
+            return SelectiveDecision(
+                "escalate", "human", "conversion resistance is unavailable",
+                assessment, conversion_diagnostics,
+            )
+        if assessment.conversions_to_reverse < min_conversions_to_reverse:
+            return SelectiveDecision(
+                "escalate", "human", "conversion resistance is below policy threshold",
+                assessment, conversion_diagnostics,
+            )
+        diagnostics = conversion_diagnostics
     if assessment.verdict == proceed_side:
         return SelectiveDecision(
             "proceed", "evidence", "independent evidence satisfies policy",

@@ -206,6 +206,12 @@ assessment. Contradictory evidence blocks; balanced, missing, or thin evidence
 escalates to a separately authorized human. Escalation is not permission, and
 evidence cannot override a deterministic deny.
 
+Evidence-sensitive policy may independently require both attack prices:
+`min_flip_budget` for newly forged opposing root mass and
+`min_conversions_to_reverse` for compromised winning roots. The latter is
+optional for backward compatibility. When configured, a missing or sub-threshold
+conversion price escalates; it can never inherit the deterministic allow.
+
 This routing contract is an execution-safety policy, not a claim that the
 provenance method is globally more accurate than ordinary authorization rules.
 
