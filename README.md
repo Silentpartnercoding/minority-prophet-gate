@@ -25,9 +25,24 @@ implements evidence-root aggregation, whose core properties are
 - **T1 — Immunity:** given side-consistent attestations, the verdict is
   invariant under arbitrary corruption of who-copied-whom. Lineage accuracy
   is irrelevant; only origins matter.
-- **T4 — Margin flip condition:** every decision ships with its attack
-  price (`flip_budget`): the number of forged *independent attested roots*
-  required for abstention; one more reverses it. Message volume is worthless.
+- **T4 — Margin flip condition:** every decision ships with its attack price,
+  and there are **two prices**, because there are two attacks. Message volume is
+  worthless against both.
+  - `flip_budget` — **forgery**: fabricating new *independent attested roots* on
+    the losing side. Each moves the margin one unit, so `flip_budget` forgeries
+    force abstention and one more reverses.
+  - `conversions_to_reverse` — **compromise**: stealing the key of a root that
+    already supports the winner and flipping it. That root leaves the winning
+    side *and* joins the losing one, so each action moves the margin **two**
+    units. This price is roughly **half** `flip_budget`, and it is the relevant
+    one when the threat is key compromise. Quoting `flip_budget` alone overstates
+    the attacker's cost by ~2× (research counterexample CE-03).
+  - `abstention_reachable_by_conversion` — **false at odd `flip_budget`.**
+    Conversions move the margin in steps of two and so preserve its parity: from
+    an odd margin the attacker can never land on a tie. Abstention — the safe
+    outcome — is simply not on the compromise path, and the cheapest attack goes
+    straight to a confidently *wrong* verdict. Do not assume a thin margin
+    degrades to "don't know"; at odd margins it does not.
 
 Proof texts, an exhaustive machine verifier (all worlds ≤ 6 claims, 121,944
 rewirings, 100k randomized instances, zero violations), benchmarks against
@@ -48,7 +63,12 @@ d = decide(envelopes, TrustAllVerifier(), proceed_side=1, min_flip_budget=1.0)
 
 print(d.action)        # "block"
 print(d.roots_for, d.roots_against)   # 1 2
-print(d.flip_budget)   # 1.0  <- forged roots needed to change this decision
+print(d.flip_budget)              # 1.0 <- FORGED roots needed to change this
+print(d.conversions_to_reverse)   # 1   <- COMPROMISED roots needed. Usually the
+                                  #        smaller number, and the one to plan against.
+print(d.diagnostics["abstention_reachable_by_conversion"])
+                                  # False <- odd margin: a compromise attack cannot
+                                  #          produce a tie, only a wrong answer.
 ```
 
 Replace the one line in your orchestrator that says
@@ -128,6 +148,19 @@ visible during migration at the configurable `unbound_root_weight=0.5`, but
 never increases the strength score; this makes migration-mode `flip_budget`
 conservative. Set `unbound_root_weight=0.0` for the documented strict end
 state.
+
+**Units, when weights are in play.** With any root weight other than `1.0`,
+`flip_budget` is a quantity of *root mass*, not a count of roots — it can come
+back `1.5`, and half a forged root is not something an attacker can buy. Every
+verdict therefore reports which it is:
+
+| field | meaning |
+|---|---|
+| `flip_budget_unit` | `"independent roots"` or `"weighted root mass"` |
+| `flip_budget_is_root_count` | `True` only when the number is a countable number of roots |
+
+`conversions_to_reverse` is always a count of actions, so it stays an integer in
+both modes and is the safer number to threshold on.
 
 Subject and `observed_at` live in the signed Entry Stamp predicate, not in an
 issuer manifest: manifests answer *may this identity testify?*; stamps answer
