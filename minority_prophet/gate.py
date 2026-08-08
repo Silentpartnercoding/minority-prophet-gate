@@ -9,11 +9,16 @@ from .adapter_acp import AttestationVerifier, DEFAULT_FRESHNESS, envelopes_to_cl
 class GateDecision:
     action: str                # "proceed" | "block" | "escalate"
     decision: Optional[int]    # winning side, None on abstain
-    flip_budget: float         # forged independent roots needed to change this
+    flip_budget: float         # price in FORGED roots (see conversions_to_reverse)
     confidence: float
     roots_for: int
     roots_against: int
     diagnostics: dict = field(default_factory=dict)
+    conversions_to_reverse: Optional[int] = None
+    """Price in COMPROMISED roots -- roughly half `flip_budget`, and the number
+    that matters when the threat is root-key compromise rather than pure
+    forgery. A compromised root leaves the winning side and joins the losing
+    one, moving the margin by two units instead of one (CE-03)."""
 
 @dataclass
 class EvidenceAssessment:
@@ -24,6 +29,7 @@ class EvidenceAssessment:
     roots_for: int
     roots_against: int
     diagnostics: dict = field(default_factory=dict)
+    conversions_to_reverse: Optional[int] = None
 
 def assess(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
            abstain_margin: float = 0.0, decision_subject=None,
@@ -55,13 +61,21 @@ def assess(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
         strength_margin = bound.margin
         diag["bound_root_mass"] = bound.root_mass
         diag["migration_flip_budget_conservative"] = True
+        # flip_budget is now the BOUND margin, so the conversion price must be
+        # recomputed over the same claim set. Carrying `v`'s figures here would
+        # price an attack on a population that no longer determines the verdict.
+        for key in ("conversions_to_reverse", "conversions_to_abstention",
+                    "abstention_reachable_by_conversion", "flip_budget_unit",
+                    "flip_budget_is_root_count"):
+            diag[key] = bound.diagnostics[key]
     weights = {claim.id: claim.weight for claim in rep.claims}
     roots_for = sum(1 for root in v.roots.get(1, set()) if weights.get(root, 1.0) > 0)
     roots_against = sum(1 for root in v.roots.get(0, set()) if weights.get(root, 1.0) > 0)
     if v.decision is None:
         diag = dict(diag, reason="abstained: evidence balanced")
     return EvidenceAssessment(v.decision, strength_margin, v.confidence,
-                              roots_for, roots_against, diag)
+                              roots_for, roots_against, diag,
+                              diag.get("conversions_to_reverse"))
 
 def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
            proceed_side: int = 1, min_flip_budget: float = 1.0,
@@ -81,7 +95,8 @@ def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
     if assessment.verdict is None:
         return GateDecision("escalate", None, assessment.flip_budget,
                             assessment.confidence, assessment.roots_for,
-                            assessment.roots_against, assessment.diagnostics)
+                            assessment.roots_against, assessment.diagnostics,
+                            assessment.conversions_to_reverse)
     if assessment.verdict == proceed_side and assessment.flip_budget >= min_flip_budget:
         action = "proceed"
         diagnostics = assessment.diagnostics
@@ -93,4 +108,5 @@ def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
         diagnostics = assessment.diagnostics
     return GateDecision(action, assessment.verdict, assessment.flip_budget,
                         assessment.confidence, assessment.roots_for,
-                        assessment.roots_against, diagnostics)
+                        assessment.roots_against, diagnostics,
+                        assessment.conversions_to_reverse)
