@@ -188,6 +188,17 @@ def envelopes_to_claims(envelopes: Iterable[dict],
             parent = record["parent"]
             if parent not in valid or parent in invalid:
                 invalid.add(cid); changed = True; continue
+            # A derived claim asserting the OPPOSITE of what it derives from is a
+            # contradiction, not evidence: it says "I am an echo of X" and "X is
+            # wrong" in one breath. Admitting it puts one root on both sides,
+            # which voids T1's precondition -- the guarantee that lineage
+            # corruption cannot move the verdict. The gate then has a verdict no
+            # theorem covers. Quarantine it at the boundary so that never happens;
+            # the loop rejects its descendants on the next pass.
+            if records[parent]["assertion"] != record["assertion"]:
+                invalid.add(cid); changed = True
+                exclusions["side_contradiction"] = exclusions.get("side_contradiction", 0) + 1
+                continue
             ancestor, lineage = records[parent], {cid}
             while ancestor["parent"] is not None and ancestor["parent"] in records:
                 if ancestor["parent"] in lineage:

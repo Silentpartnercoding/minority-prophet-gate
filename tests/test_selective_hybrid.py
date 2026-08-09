@@ -1,6 +1,12 @@
 import unittest
+from unittest.mock import patch
 
-from minority_prophet import DeterministicDecision, TrustAllVerifier, selective_decide
+from minority_prophet import (
+    DeterministicDecision,
+    EvidenceAssessment,
+    TrustAllVerifier,
+    selective_decide,
+)
 
 
 def roots(for_count, against_count):
@@ -49,6 +55,43 @@ class SelectiveHybridTests(unittest.TestCase):
             roots(2, 1), TrustAllVerifier(), decision_subject="action-1",
         )
         self.assertEqual((decision.action, decision.route), ("proceed", "evidence"))
+
+    def test_conversion_resistance_can_be_required_for_proceed(self):
+        primary = DeterministicDecision(
+            "allow", "base policy allows", evidence_sensitive=True,
+        )
+        sufficient = selective_decide(
+            primary, roots(5, 2), TrustAllVerifier(), decision_subject="action-1",
+            min_conversions_to_reverse=2,
+        )
+        thin = selective_decide(
+            primary, roots(5, 2), TrustAllVerifier(), decision_subject="action-1",
+            min_conversions_to_reverse=3,
+        )
+        self.assertEqual(sufficient.assessment.flip_budget, 3.0)
+        self.assertEqual(sufficient.assessment.conversions_to_reverse, 2)
+        self.assertEqual((sufficient.action, sufficient.route), ("proceed", "evidence"))
+        self.assertEqual((thin.action, thin.route), ("escalate", "human"))
+        self.assertEqual(thin.reason, "conversion resistance is below policy threshold")
+        self.assertEqual(thin.diagnostics["observed_conversions_to_reverse"], 2)
+
+    def test_unavailable_conversion_price_fails_closed(self):
+        assessment = EvidenceAssessment(1, 4.0, 1.0, 4, 0,
+                                        conversions_to_reverse=None)
+        with patch("minority_prophet.selective_hybrid.assess", return_value=assessment):
+            decision = selective_decide(
+                DeterministicDecision("review", "check evidence"),
+                [], TrustAllVerifier(), min_conversions_to_reverse=1,
+            )
+        self.assertEqual((decision.action, decision.route), ("escalate", "human"))
+        self.assertEqual(decision.reason, "conversion resistance is unavailable")
+
+    def test_conversion_threshold_must_be_a_positive_integer(self):
+        primary = DeterministicDecision("review", "check evidence")
+        for invalid in (0, -1, 1.5, True):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                selective_decide(primary, [], TrustAllVerifier(),
+                                 min_conversions_to_reverse=invalid)
 
 
 if __name__ == "__main__":

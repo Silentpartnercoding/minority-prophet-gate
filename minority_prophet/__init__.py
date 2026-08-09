@@ -1,8 +1,10 @@
 """Minority Prophet Gate: refuse manufactured consensus in multi-agent systems.
 
 Counts independent, attested evidence roots instead of voices. Core
-properties are proven (see FORMAL.md): copy invariance, immunity to
-side-preserving lineage corruption, and the margin flip condition.
+properties are proven under the stated model -- copy invariance, immunity to
+side-preserving AND root-preserving lineage corruption, and the margin flip
+condition. FORMAL.md gives the pointers; the normative hypotheses are the theorem
+ledger in the research repository, not this docstring.
 """
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
 from .reconcile import StateVerdict, reconcile
