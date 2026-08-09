@@ -20,7 +20,7 @@ Stdlib only; CI runs `unittest discover`.
 import unittest
 
 from minority_prophet.aggregator import Claim, aggregate
-from minority_prophet.gate import decide
+from minority_prophet.gate import assess, decide
 from minority_prophet.adapter_acp import TrustAllVerifier
 
 
@@ -43,38 +43,97 @@ class TestImmunityGating(unittest.TestCase):
         self.assertFalse(v.diagnostics["immunity_applicable"])
         self.assertIsNotNone(v.decision, "aggregator is unchanged; only the gate refuses")
 
-    def test_gate_escalates_when_immunity_is_void(self):
+    def test_the_envelope_route_to_void_immunity_is_now_closed(self):
+        """These three tests were written when the adapter passed a contradicting
+        echo straight through. It no longer does, so `decide()` cannot be driven
+        into the void-immunity branch from envelopes at all -- which is the
+        stronger outcome, and the reason the assertions here changed."""
         envs = [_envelope("r", "SAFE"), _envelope("c", "UNSAFE", derived_from="r"),
                 _envelope("s0", "SAFE"), _envelope("s1", "SAFE"), _envelope("s2", "SAFE")]
         d = decide(envs, TrustAllVerifier(), proceed_side=1, min_flip_budget=1.0)
-        self.assertFalse(d.diagnostics["immunity_applicable"])
-        self.assertEqual(d.action, "escalate",
-                         "a verdict with no immunity guarantee must not proceed")
-        self.assertIn("immunity precondition violated", d.diagnostics["reason"])
+        self.assertEqual(d.diagnostics["exclusions"].get("side_contradiction"), 1)
+        self.assertTrue(d.diagnostics["immunity_applicable"],
+                        "the contradiction never reaches the aggregator")
+        self.assertEqual(d.action, "proceed",
+                         "three honest roots remain and the guarantee holds")
 
-    def test_the_flag_is_actually_read(self):
-        """The defect was not a wrong value -- it was a correct value nobody
-        consulted. Assert the gating path depends on it."""
-        clean = [_envelope(f"s{i}", "SAFE") for i in range(3)]
-        d_clean = decide(clean, TrustAllVerifier(), proceed_side=1, min_flip_budget=1.0)
-        self.assertTrue(d_clean.diagnostics["immunity_applicable"])
-        self.assertEqual(d_clean.action, "proceed")
-
-        conflicted = clean + [_envelope("r", "SAFE"), _envelope("c", "UNSAFE", derived_from="r")]
-        d_conf = decide(conflicted, TrustAllVerifier(), proceed_side=1, min_flip_budget=1.0)
-        self.assertEqual(d_conf.action, "escalate")
-        self.assertNotEqual(d_clean.action, d_conf.action,
-                            "same proceed_side and budget; only immunity differs")
-
-    def test_escalation_preserves_the_verdict_for_the_human(self):
-        """Escalate is not block. The reviewer needs to see what the evidence
-        said, and why it is not trustworthy on its own."""
-        envs = [_envelope("r", "SAFE"), _envelope("c", "UNSAFE", derived_from="r"),
-                _envelope("s0", "SAFE"), _envelope("s1", "SAFE"), _envelope("s2", "SAFE")]
-        d = decide(envs, TrustAllVerifier(), proceed_side=1, min_flip_budget=1.0)
+    def test_the_backstop_escalates_when_the_flag_is_false(self):
+        """The branch is now unreachable through the adapter, so it is exercised
+        directly. It stays in the code because a different transport, a future
+        adapter, or a caller using aggregate() can all reintroduce the shape, and
+        a guarantee that relies on nobody upstream erring is not a guarantee."""
+        import minority_prophet.gate as gate_module
+        real = gate_module.assess
+        try:
+            def voided(*args, **kwargs):
+                a = real(*args, **kwargs)
+                a.diagnostics = dict(a.diagnostics, immunity_applicable=False)
+                return a
+            gate_module.assess = voided
+            d = gate_module.decide([_envelope(f"s{i}", "SAFE") for i in range(3)],
+                                   TrustAllVerifier(), proceed_side=1, min_flip_budget=1.0)
+        finally:
+            gate_module.assess = real
         self.assertEqual(d.action, "escalate")
-        self.assertIsNotNone(d.decision, "the verdict is still reported, just not acted on")
+        self.assertIn("immunity precondition violated", d.diagnostics["reason"])
+        self.assertIsNotNone(d.decision,
+                             "escalate is not block: the reviewer still sees the verdict")
         self.assertGreaterEqual(d.roots_for, 1)
+
+    def test_a_clean_input_still_proceeds(self):
+        d = decide([_envelope(f"s{i}", "SAFE") for i in range(3)],
+                   TrustAllVerifier(), proceed_side=1, min_flip_budget=1.0)
+        self.assertTrue(d.diagnostics["immunity_applicable"])
+        self.assertEqual(d.action, "proceed")
+
+
+class TestSideContradictionQuarantine(unittest.TestCase):
+    """A derived claim asserting the opposite of its parent is a contradiction,
+    not evidence. It says "I am an echo of X" and "X is wrong" in one breath.
+
+    Admitting it puts one root on both sides, which voids T1's precondition, and
+    the gate is left holding a verdict no theorem covers. Before this, the
+    adapter passed such a claim through unflagged -- measured: quarantined=0,
+    immunity_applicable=False. The escalation above is the backstop; this is the
+    cause."""
+
+    def test_a_contradicting_echo_is_quarantined_at_the_boundary(self):
+        envs = [_envelope("r", "SAFE"),
+                _envelope("c", "UNSAFE", derived_from="r"),
+                _envelope("s", "SAFE"), _envelope("s2", "SAFE")]
+        a = assess(envs, TrustAllVerifier())
+        self.assertEqual(a.diagnostics["quarantined"], 1)
+        self.assertEqual(a.diagnostics["exclusions"].get("side_contradiction"), 1)
+        self.assertTrue(a.diagnostics["immunity_applicable"],
+                        "with the contradiction removed, T1's precondition holds again")
+
+    def test_descendants_of_a_contradiction_are_rejected_too(self):
+        """Otherwise the grandchild is promoted to its own evidence root and the
+        contradiction buys the attacker a root instead of costing one."""
+        envs = [_envelope("r", "SAFE"),
+                _envelope("c", "UNSAFE", derived_from="r"),
+                _envelope("g", "UNSAFE", derived_from="c")]
+        a = assess(envs, TrustAllVerifier())
+        self.assertEqual(a.diagnostics["quarantined"], 2)
+
+    def test_an_honest_echo_is_untouched(self):
+        envs = [_envelope("r", "SAFE"),
+                _envelope("c", "SAFE", derived_from="r"),
+                _envelope("o", "UNSAFE")]
+        a = assess(envs, TrustAllVerifier())
+        self.assertEqual(a.diagnostics["quarantined"], 0)
+        self.assertTrue(a.diagnostics["immunity_applicable"])
+
+    def test_the_escalation_backstop_still_exists(self):
+        """The adapter now removes the only route by which this shape reached the
+        aggregator, so the escalation should be unreachable through decide().
+        It stays anyway: a future adapter, a different transport, or a caller
+        using aggregate() directly can all reintroduce it, and a guarantee that
+        depends on nobody making a mistake upstream is not a guarantee."""
+        v = aggregate([Claim(id="r", assertion=True, parent=None),
+                       Claim(id="c", assertion=False, parent="r")] +
+                      [Claim(id=f"s{i}", assertion=True, parent=None) for i in range(3)])
+        self.assertFalse(v.diagnostics["immunity_applicable"])
 
 
 if __name__ == "__main__":
