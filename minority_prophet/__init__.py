@@ -19,6 +19,7 @@ from .runtime_adapter import (
 )
 from .runtime_integrations import IdempotentHttpRuntime, InProcessToolRuntime
 from .selective_hybrid import DeterministicDecision, SelectiveDecision, selective_decide
+from .memory_evidence import MemoryEvidenceAssessment, assess_memory_evidence
 
 __version__ = "0.1.0"
 __all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
@@ -28,4 +29,5 @@ __all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
            "RuntimeAction", "RuntimeAdapter", "RuntimeBoundaryError",
            "RuntimeController", "RuntimeReceipt",
            "IdempotentHttpRuntime", "InProcessToolRuntime",
-           "DeterministicDecision", "SelectiveDecision", "selective_decide"]
+           "DeterministicDecision", "SelectiveDecision", "selective_decide",
+           "MemoryEvidenceAssessment", "assess_memory_evidence"]
