@@ -22,9 +22,19 @@ implements evidence-root aggregation, whose core properties are
 **machine-checked under the stated model**, not tuned:
 
 - **T2 — Copy invariance:** duplicating a claim can never change the verdict.
-- **T1 — Immunity:** given side-consistent attestations, the verdict is
-  invariant under arbitrary corruption of who-copied-whom. Lineage accuracy
-  is irrelevant; only origins matter.
+- **T1 — Immunity:** given side-consistent attestations **and an unchanged set of
+  origins**, the verdict is invariant under arbitrary corruption of who-copied-whom
+  among the rest. Lineage accuracy between claims is irrelevant; only origins
+  matter.
+  - The origin-set hypothesis is load-bearing and was previously omitted here.
+    Corruption that *creates or destroys an origin* — orphaning a claim so it
+    becomes a root, or attaching a root under a parent — is outside T1, and the
+    verdict may change. What T1 buys is indifference to who copied whom, not
+    indifference to how many independent origins exist. Tolerance to origin-set
+    error is a **separate** theorem, T5, with its own bound: a verdict survives if
+    its margin exceeds the number of origin-set changes.
+  - See `FORMAL.md`. The normative statement of every hypothesis is the theorem
+    ledger in the research repository, not this list.
 - **T4 — Margin flip condition:** every decision ships with its attack price,
   and there are **two prices**, because there are two attacks. Message volume is
   worthless against both.
