@@ -22,9 +22,19 @@ implements evidence-root aggregation, whose core properties are
 **machine-checked under the stated model**, not tuned:
 
 - **T2 — Copy invariance:** duplicating a claim can never change the verdict.
-- **T1 — Immunity:** given side-consistent attestations, the verdict is
-  invariant under arbitrary corruption of who-copied-whom. Lineage accuracy
-  is irrelevant; only origins matter.
+- **T1 — Immunity:** given side-consistent attestations **and an unchanged set of
+  origins**, the verdict is invariant under arbitrary corruption of who-copied-whom
+  among the rest. Lineage accuracy between claims is irrelevant; only origins
+  matter.
+  - The origin-set hypothesis is load-bearing and was previously omitted here.
+    Corruption that *creates or destroys an origin* — orphaning a claim so it
+    becomes a root, or attaching a root under a parent — is outside T1, and the
+    verdict may change. What T1 buys is indifference to who copied whom, not
+    indifference to how many independent origins exist. Tolerance to origin-set
+    error is a **separate** theorem, T5, with its own bound: a verdict survives if
+    its margin exceeds the number of origin-set changes.
+  - See `FORMAL.md`. The normative statement of every hypothesis is the theorem
+    ledger in the research repository, not this list.
 - **T4 — Margin flip condition:** every decision ships with its attack price,
   and there are **two prices**, because there are two attacks. Message volume is
   worthless against both.
@@ -143,7 +153,7 @@ Wire yours via `CallbackVerifier`. Rules the adapter enforces regardless:
 
 For a decision about a specific subject, call `decide(...,
 decision_subject="job:123")`. Matching **bound** roots determine
-`flip_budget` and the T5 safety floor. A legacy root without a subject remains
+`flip_budget` and the `min_flip_budget` policy threshold. A legacy root without a subject remains
 visible during migration at the configurable `unbound_root_weight=0.5`, but
 never increases the strength score; this makes migration-mode `flip_budget`
 conservative. Set `unbound_root_weight=0.0` for the documented strict end
@@ -161,6 +171,27 @@ verdict therefore reports which it is:
 
 `conversions_to_reverse` is always a count of actions, so it stays an integer in
 both modes and is the safer number to threshold on.
+
+**On T5, and what a threshold does not inherit from it.** Earlier revisions of
+this file called `min_flip_budget` "the T5 safety floor". T5 states that a
+verdict with `|margin| > k` survives `k` root-set errors — but only between
+worlds that are side-consistent **and carry the same assertions**. That second
+hypothesis is necessary, not decorative: the research repository's `CE-02`
+falsifies the version without it, and `T5_needs_assert_fixed` compiles a witness
+where a single side conversion flips a margin-2 verdict at *zero* root-set
+error.
+
+So T5 covers **misattribution** — a root dropped, duplicated, or wrongly
+identified, with no assertion changed. It does not cover **compromise**, which
+changes assertions by definition. Measured on this aggregator, five supporting
+roots against two:
+
+    2 supporting roots removed (assertions preserved) -> verdict survives
+    2 supporting roots flipped (assertions changed)   -> verdict REVERSED
+
+Same `k`. Setting `min_flip_budget` from T5 buys protection against the first
+column and none against the second. Price compromise with
+`conversions_to_reverse`, which is what it is for.
 
 Subject and `observed_at` live in the signed Entry Stamp predicate, not in an
 issuer manifest: manifests answer *may this identity testify?*; stamps answer
