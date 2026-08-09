@@ -2,7 +2,8 @@
 
 These tests do not prove the theorems. They ensure policy knobs cannot turn
 invalid or unbound evidence into the independent, bound root strength that the
-theorems and T5 floor rely on.
+theorems and the `min_flip_budget` threshold rely on. (Formerly "T5 floor";
+T5 governs assertion-preserving root-set error only -- see README, "On T5".)
 """
 import os
 import sys
