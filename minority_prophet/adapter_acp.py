@@ -6,8 +6,8 @@ Envelope shape (fields beyond these are ignored):
   "agent": "claude-writer",
   "assertion": "SAFE" | "UNSAFE" | 1 | 0,
   "attest": {
-    "origin": "scan-7f2c",        # root id this claim descends from
-    "derived_from": "c2",         # optional: parent claim id (echo)
+    "origin": "scan-7f2c",        # freshness class only -- see below, NOT root identity
+    "derived_from": "c2",         # optional: parent claim id (echo). THIS is what collapses.
     "sig": "attestation:..."      # signature over the entry-stamp payload
   }
 }
@@ -18,10 +18,26 @@ SECURITY MODEL (read before deploying):
   e.g. a production attestation client). The aggregator trusts whatever the verifier
   passes: THE GUARANTEE IS ONLY AS STRONG AS THE VERIFIER.
 - Default-derived rule: a claim WITHOUT a verified fresh-root attestation
-  is treated as an echo. If it names a parent/origin, it collapses into
-  that family; if it names nothing verifiable, it is quarantined as an
+  is treated as an echo. If it names a parent via `derived_from`, it collapses
+  into that family; if it names nothing verifiable, it is quarantined as an
   UNATTESTED SINGLETON and contributes zero roots. Copying is the
   presumption; independence requires proof.
+- WHAT `origin` DOES NOT DO. It does not establish root identity and it does not
+  collapse claims. Every executable use of `origin` in this package classifies
+  freshness policy (`_freshness_policy`, here and in reconcile.py); the
+  aggregator never reads it. Two claims declaring the same `origin`, both
+  returned as `root` by the verifier, are TWO independent roots. Collapse
+  happens only through `derived_from` and only when the verifier returns
+  `derived`.
+  An integrator who populates `origin` faithfully, omits `derived_from`, and
+  supplies a verifier that authenticates signatures without deduplicating by
+  origin will manufacture independence while believing shared provenance was
+  declared. Establishing that one controller yields one root is the VERIFIER'S
+  job, and neither shipped verifier does it: TrustAllVerifier makes every
+  origin-bearing claim a root by construction and states it provides no
+  security. This was found by adversarial review, not by a failing test --
+  fifty claims sharing one origin converted a correctly-escalating tie into a
+  proceed.
 - Subject binding and freshness are checked at the adapter boundary. A root
   is bound by its signed entry-stamp subject; manifests remain pure identity
   and scope under the two-ID rule.
