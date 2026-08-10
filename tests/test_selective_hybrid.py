@@ -96,3 +96,65 @@ class SelectiveHybridTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OriginSemanticsTests(unittest.TestCase):
+    """GATE-01. `origin` classifies freshness; it does not collapse roots.
+
+    The envelope contract used to describe `origin` as "root id this claim
+    descends from" and said a claim naming a parent/origin "collapses into that
+    family". No code path implements that: every executable use of `origin` is
+    freshness-policy classification and the aggregator never reads it. Collapse
+    happens only through `derived_from`.
+
+    Found by adversarial review rather than by a failing test -- fifty claims
+    sharing one origin turned a correctly-escalating tie into a proceed.
+
+    These tests pin the real contract in both directions so the documentation and
+    the code cannot drift apart again. If origin-based collapse is ever
+    implemented, the second test fails and the docstring must change with it.
+    """
+
+    @staticmethod
+    def _root(claim_id, origin, assertion, subject="action-1"):
+        return {"claim_id": claim_id, "agent": origin, "assertion": assertion,
+                "attest": {"origin": origin, "subject": subject}}
+
+    @staticmethod
+    def _derived(claim_id, parent, origin, assertion, subject="action-1"):
+        return {"claim_id": claim_id, "agent": origin, "assertion": assertion,
+                "attest": {"origin": origin, "subject": subject,
+                           "derived_from": parent}}
+
+    def _decide(self, envelopes):
+        return selective_decide(
+            DeterministicDecision("allow", "base policy allows", evidence_sensitive=True),
+            envelopes, TrustAllVerifier(), decision_subject="action-1").action
+
+    def _tie(self):
+        return [self._root("s0", "safe-0", "SAFE"),
+                self._root("u0", "unsafe-0", "UNSAFE")]
+
+    def test_derived_claims_do_not_buy_independence(self):
+        """T2 copy invariance, at the gate boundary. This is the guarantee."""
+        tie = self._tie()
+        copies = tie + [self._derived(f"c{i}", "s0", "safe-0", "SAFE")
+                        for i in range(50)]
+        self.assertEqual(self._decide(tie), "escalate")
+        self.assertEqual(self._decide(copies), "escalate",
+                         "50 derived copies must not convert a tie into a proceed")
+
+    def test_shared_origin_alone_does_not_collapse_roots(self):
+        """The documented contract, pinned. NOT a guarantee -- a warning.
+
+        Establishing that one controller yields one root is the verifier's job.
+        Neither shipped verifier does it, so claims sharing an origin remain
+        independent roots and a tie becomes a proceed. If this ever changes,
+        the adapter docstring must change with it.
+        """
+        tie = self._tie()
+        shared = tie + [self._root(f"x{i}", "safe-0", "SAFE") for i in range(50)]
+        self.assertEqual(self._decide(shared), "proceed",
+                         "origin is not a collapse key; if this now escalates, "
+                         "origin-based collapse was implemented and the adapter "
+                         "docstring is stale")
