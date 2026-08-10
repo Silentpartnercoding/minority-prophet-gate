@@ -45,6 +45,19 @@ permission to do anything else, and nothing here overrides law or the LICENSE.
   describing an unfixed vulnerability, and do not publish a working exploit
   against a real deployment.
 
+### Where to start
+
+The claims this project asserts, the evidence behind each, and what would falsify
+them are listed in `CLAIMS.md` in the research repository, together with a section
+of known weaknesses published so you do not spend time rediscovering them:
+
+  https://github.com/Silentpartnercoding/minority-prophet/blob/main/CLAIMS.md
+
+`AUDIT-BRIEF/` there explains what has already been found. It deliberately
+prescribes no attack method: one written by the maintainers would encode the
+maintainers' blind spot, and the single class of defect their tooling has never
+caught is design error. Attack this however you see fit.
+
 ### Reporting
 
 Report privately first, through this repository's private security advisory
