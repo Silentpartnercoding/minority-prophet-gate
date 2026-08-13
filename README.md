@@ -6,7 +6,18 @@
 > prevents unsupported actions from reaching a runtime. It is vendor-neutral
 > and can be embedded without replacing an existing model or agent framework.
 
+> **Experimental preview:** ready for simulation, adversarial evaluation, and
+> shadow observation. It is not a production-security release. Production
+> enforcement requires a real verifier, authorized adapters, durable state,
+> protected runtime paths, and independent review.
+
 ## Attack it or shadow your workflow
+
+**What you are testing:** whether the same MP Gate logic remains fail-closed
+when evidence is copied, contradictory, malformed, weak, or bound to the wrong
+action—and whether its shadow decisions reveal useful differences from your
+existing workflow. You are not testing signature security: the laboratory
+verifier is deliberately simulated and clearly labeled.
 
 People and coding agents can attack the engine with their own JSON or JSONL—no
 API key or real runtime required:

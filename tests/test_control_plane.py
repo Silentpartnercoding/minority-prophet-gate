@@ -154,6 +154,20 @@ class ControlPlaneTests(unittest.TestCase):
         self.assertEqual(outcome.decision.action, "escalate")
         self.assertEqual(runtime.effects, 0)
 
+    def test_new_evidence_cannot_erase_prior_opposing_evidence(self):
+        runtime = Runtime()
+        prior = {
+            "claim_id": "prior-unsafe", "agent": "prior-ci",
+            "assertion": "UNSAFE",
+            "attest": {"origin": "prior-test", "subject": SUBJECT,
+                       "signed_by": "trusted-ci"},
+        }
+        outcome = EvidenceControlPlane(
+            router("SAFE"), CandidateEvidenceBridge(verifier())
+        ).run(action(), policy(), VerifiedEvidenceBatch((prior,), verifier()), runtime)
+        self.assertNotEqual(outcome.decision.action, "proceed")
+        self.assertEqual(runtime.effects, 0)
+
     def test_deterministic_deny_does_not_dispatch_collection(self):
         evidence_router = router()
         runtime = Runtime()

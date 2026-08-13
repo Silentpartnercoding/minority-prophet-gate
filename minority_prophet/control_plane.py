@@ -75,15 +75,18 @@ class CandidateEvidenceBridge:
     def verify(self, request: EvidenceRequest,
                results: tuple[EvidenceCollectionResult, ...],
                previous: VerifiedEvidenceBatch) -> VerifiedEvidenceBatch:
-        del request, previous
-        envelopes = tuple(
+        del request
+        returned = tuple(
             envelope
             for result in results if result.status == "completed"
             for envelope in result.envelopes
             if "assertion" in envelope
         )
+        envelopes = previous.envelopes + returned
         return VerifiedEvidenceBatch(envelopes, self.verifier, {
-            "candidate_envelopes": len(envelopes),
+            "previous_envelopes": len(previous.envelopes),
+            "returned_candidate_envelopes": len(returned),
+            "complete_candidate_envelopes": len(envelopes),
             "verification_occurs_at_gate": True,
         })
 
