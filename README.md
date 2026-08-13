@@ -6,21 +6,24 @@
 > prevents unsupported actions from reaching a runtime. It is vendor-neutral
 > and can be embedded without replacing an existing model or agent framework.
 
-## Bring your own mess
+## Attack it or shadow your workflow
 
 People and coding agents can attack the engine with their own JSON or JSONL—no
 API key or real runtime required:
 
 ```bash
-python -m minority_prophet.byom_cli evaluate \
+python -m minority_prophet.byom_cli attack \
   --evidence examples/byom/messy-evidence.jsonl \
   --policy examples/byom/policy.json \
   --feedback byom-feedback.json
 ```
 
-The command is simulation-only and always performs zero runtime effects. Read
+Attack and shadow commands are simulation-only and always perform zero runtime
+effects. Shadow mode consumes copies of workflow events and reports agreements
+and disagreements without joining the execution path. Read
 [`AGENT-QUICKSTART.md`](AGENT-QUICKSTART.md) for the agent handoff contract,
-input format, adversarial ideas, and privacy-safe feedback workflow.
+input formats, adversarial mission, shadow adapter, privacy-safe feedback, and
+the explicit path from evaluation to an installed enforcement integration.
 
 **Refuse manufactured consensus.** A drop-in gate for multi-agent systems that
 counts *independent, attested evidence roots* instead of voices — so seven

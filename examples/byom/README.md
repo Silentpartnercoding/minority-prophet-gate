@@ -8,3 +8,8 @@ Give your coding agent the repository and say:
 
 `messy-evidence.jsonl` contains copied SAFE voices, one invalid forgery, and two
 independent UNSAFE roots. `policy.json` binds evaluation to the exact subject.
+
+`shadow-events.jsonl` shows the neutral adapter shape for recorded workflow
+events. Each event carries an ID, subject, what the existing workflow actually
+did, and the evidence visible at that moment. Shadow mode only reads these
+copies; it never calls the workflow.

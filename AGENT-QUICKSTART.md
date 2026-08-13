@@ -1,102 +1,112 @@
-# Agent quickstart: bring your own mess
+# Agent quickstart: attack, shadow, then integrate
 
 You are evaluating **Minority Prophet Gate**, an evidence-control plane for
-consequential agent actions. Your job is to supply messy evidence, try to break
-the decision logic, and return a privacy-safe feedback file to your operator.
+consequential agent actions. Start in one of two zero-authority modes:
 
-## Safety boundary
+- **attack**: invent hostile evidence and try to violate stated invariants;
+- **shadow**: compare MP with read-only copies of real workflow events.
 
-`mp-gate evaluate` is simulation-only. It never calls a tool, API, deployment,
-payment, filesystem mutation, or other protected runtime action. The output
-always reports `runtime_effects: 0`.
+Both modes are simulation-only. They never call tools, APIs, deployments,
+payments, filesystems, or protected runtimes. Output always reports
+`runtime_effects: 0`.
 
-The lab input field `mp_test_verdict` is deliberately tester-declared:
+## Laboratory verifier
 
-- `root`: pretend the verifier established an independent evidence root;
-- `derived`: pretend it established a copy/derivation; include
-  `attest.derived_from`;
+The input field `mp_test_verdict` is deliberately tester-declared:
+
+- `root`: pretend verification established an independent evidence root;
+- `derived`: pretend it established a copy; include `attest.derived_from`;
 - `invalid`: pretend verification failed.
 
-This field is not a signature and is never suitable for production. It exists
-so you can test aggregation, lineage, malformed input, and fail-closed behavior
-without keys or vendor accounts.
+This is not authentication and must never be used for enforcement. It lets you
+test MP aggregation and lineage without keys or vendor accounts.
 
-## Run the included case
+## Mode 1: attack
 
-From the repository root:
+Run the included hostile case:
 
 ```bash
-python -m minority_prophet.byom_cli evaluate \
+python -m minority_prophet.byom_cli attack \
   --evidence examples/byom/messy-evidence.jsonl \
   --policy examples/byom/policy.json \
-  --feedback byom-feedback.json
+  --feedback attack-feedback.json
 ```
 
-If installed as a package, use `mp-gate` instead of
-`python -m minority_prophet.byom_cli`.
+If installed, replace `python -m minority_prophet.byom_cli` with `mp-gate`.
+The result states the invariants. Seek a minimal case where copied voices create
+roots, invalid/wrong-subject evidence creates permission, unsupported evidence
+proceeds, valid input crashes, or identical input produces inconsistent output.
 
-## Bring your own evidence
-
-Evidence may be one JSON array or newline-delimited JSON objects. Each object
-should resemble:
+Evidence may be a JSON array or JSONL objects:
 
 ```json
-{
-  "claim_id": "unique-claim-id",
-  "agent": "source-name",
-  "assertion": "SAFE",
-  "mp_test_verdict": "root",
-  "attest": {
-    "origin": "source-observation-id",
-    "subject": "deployment:bring-your-own-mess"
-  }
-}
+{"claim_id":"c1","agent":"source","assertion":"SAFE","mp_test_verdict":"root","attest":{"origin":"observation-1","subject":"deploy:123"}}
 ```
-
-Use assertion `SAFE`/`1` for the configured proceed side and `UNSAFE`/`0` for
-the opposing side. IDs must be unique. Derived claims should name a known parent.
 
 Policy is JSON:
 
 ```json
+{"decision_subject":"deploy:123","proceed_side":1,"min_flip_budget":1.0,"unbound_root_weight":0.0}
+```
+
+Stdin is supported:
+
+```bash
+your-generator | mp-gate attack --evidence - --policy policy.json
+```
+
+Try duplicates, deep copy chains, cycles, conflicting claims from one root,
+invalid assertions, unknown parents, wrong subjects, invalid verdicts, huge
+copy populations, ties, thin margins, and malformed JSON.
+
+## Mode 2: shadow
+
+Export read-only copies of workflow decisions as JSON or JSONL:
+
+```json
 {
-  "decision_subject": "deployment:bring-your-own-mess",
-  "proceed_side": 1,
-  "min_flip_budget": 1.0,
-  "unbound_root_weight": 0.0
+  "event_id": "deploy-101",
+  "decision_subject": "deploy:101",
+  "actual_outcome": "executed",
+  "evidence": []
 }
 ```
 
-Pipe generated evidence directly when useful:
+Accepted actual outcomes include `proceed`, `block`, `escalate`,
+`request_evidence`, plus common aliases such as `executed` and `prevented`.
 
 ```bash
-your-generator | mp-gate evaluate \
-  --evidence - --policy examples/byom/policy.json
+python -m minority_prophet.byom_cli shadow \
+  --events examples/byom/shadow-events.jsonl \
+  --policy examples/byom/policy.json \
+  --report shadow-report.json \
+  --feedback shadow-feedback.json
 ```
 
-## Adversarial cases to try
+The local report explains agreements and disagreements. The feedback file
+contains decisions and input fingerprints but omits raw events and policy. To
+attach any workflow, build a read-only exporter for these four fields. For a
+captured stream, use `--events -`. Do not give shadow mode workflow credentials.
 
-Try duplicates, long copy chains, cycles, conflicting claims from one root,
-invalid assertions, missing fields, unknown parents, wrong subjects, invalid
-test verdicts, huge numbers of copied voices, ties, and thin margins. A crash,
-silent proceed on malformed/unsupported evidence, or decision change caused
-only by extra copies is useful feedback.
+## If the operator chooses enforcement
 
-Do not include credentials, private keys, tokens, cookies, personal data, or
-proprietary raw evidence in a feedback report.
+Attack and shadow use the real MP aggregation and Gate decision logic. For live
+enforcement, reuse the package's `EvidenceControlPlane` and replace the lab
+edges with a real `AttestationVerifier`, authorized collectors, the customer's
+`RuntimeAdapter`, and durable audit/idempotency storage. Border may optionally
+admit evidence upstream. Evidence still returns to Gate for decisions.
 
-## Return results
+Never promote `mp_test_verdict` or the shadow exporter into a production
+verifier. See the control-plane example in the main README.
 
-The `--feedback` file contains the complete decision and SHA-256 fingerprints
-of inputs, but intentionally omits raw evidence and policy. Add a short note to
-`tester_notes` describing what you attempted. Send that JSON file plus the
-package version/commit to the project owner. Share raw reproduction inputs only
-when your operator explicitly approves them.
+## Return useful feedback
+
+Add a short description to `tester_notes`. Send the privacy-safe JSON plus the
+package version/commit. Do not include credentials, tokens, private keys,
+cookies, personal data, or proprietary evidence. Raw reproduction inputs should
+be shared only with explicit operator approval.
 
 Public feedback may be filed at
-`https://github.com/Silentpartnercoding/minority-prophet-gate/issues`. Attach
-the privacy-safe feedback JSON or paste its contents, describe the expected
-behavior, and state whether you can privately provide a minimal reproduction.
-
-Exit code `0` means evaluation completed. Exit code `2` means the input or file
-was rejected; stderr contains a JSON error and still reports zero runtime effects.
+`https://github.com/Silentpartnercoding/minority-prophet-gate/issues`.
+Exit code `0` means evaluation completed. Exit code `2` means JSON input was
+rejected; stderr contains a JSON error and still reports zero runtime effects.
