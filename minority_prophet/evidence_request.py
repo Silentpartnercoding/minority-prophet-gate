@@ -8,13 +8,18 @@ the evidence should support and it never authorizes the protected action.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import hashlib
 import json
-from typing import Iterable, Optional
-
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 
 SCHEMA_VERSION = "minority-prophet.evidence-request.v1"
+COLLECTOR_KINDS = frozenset({
+    "requesting_agent", "epistemic_service", "human", "program"
+})
+OUTPUT_ROLES = frozenset({
+    "candidate_evidence", "verification_artifact", "human_handoff"
+})
 
 
 class EvidenceRequestError(ValueError):
@@ -45,6 +50,69 @@ def _digest(payload: dict) -> str:
 
 
 @dataclass(frozen=True)
+class CollectorRoute:
+    """Policy-selected destination for one kind of missing evidence.
+
+    The route names a capability, never a vendor.  ``route_id`` is the stable
+    local binding used by an orchestrator to select a configured adapter.
+    """
+
+    route_id: str
+    collector_kind: str
+    capability: str
+    output_role: str
+    allowed_actions: tuple[str, ...]
+    requires_independence: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "route_id", _text(self.route_id, "route_id"))
+        kind = _text(self.collector_kind, "collector_kind")
+        if kind not in COLLECTOR_KINDS:
+            raise EvidenceRequestError(
+                f"collector_kind must be one of {sorted(COLLECTOR_KINDS)}"
+            )
+        object.__setattr__(self, "collector_kind", kind)
+        object.__setattr__(self, "capability",
+                           _text(self.capability, "capability"))
+        role = _text(self.output_role, "output_role")
+        if role not in OUTPUT_ROLES:
+            raise EvidenceRequestError(
+                f"output_role must be one of {sorted(OUTPUT_ROLES)}"
+            )
+        expected_roles = {
+            "requesting_agent": "candidate_evidence",
+            "epistemic_service": "verification_artifact",
+            "human": "human_handoff",
+        }
+        if kind in expected_roles and role != expected_roles[kind]:
+            raise EvidenceRequestError(
+                f"{kind} routes require output_role={expected_roles[kind]}"
+            )
+        object.__setattr__(self, "output_role", role)
+        actions = _unique_text(self.allowed_actions, "allowed_action")
+        if not actions:
+            raise EvidenceRequestError("a collector route requires an allowed action")
+        object.__setattr__(self, "allowed_actions", actions)
+        if not isinstance(self.requires_independence, bool):
+            raise EvidenceRequestError("requires_independence must be boolean")
+        if kind == "requesting_agent" and self.requires_independence:
+            raise EvidenceRequestError(
+                "the requesting agent cannot satisfy an independence-required route"
+            )
+
+    def to_dict(self) -> dict:
+        return {
+            "route_id": self.route_id,
+            "collector_kind": self.collector_kind,
+            "capability": self.capability,
+            "output_role": self.output_role,
+            "allowed_actions": list(self.allowed_actions),
+            "requires_independence": self.requires_independence,
+            "route_grants_protected_action_authority": False,
+        }
+
+
+@dataclass(frozen=True)
 class EvidenceRequirement:
     """A conclusion-neutral description of evidence the policy accepts.
 
@@ -55,6 +123,7 @@ class EvidenceRequirement:
 
     requirement_id: str
     description: str
+    collector_route: CollectorRoute
     accepted_kinds: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -62,13 +131,22 @@ class EvidenceRequirement:
                            _text(self.requirement_id, "requirement_id"))
         object.__setattr__(self, "description",
                            _text(self.description, "description"))
-        object.__setattr__(self, "accepted_kinds",
-                           _unique_text(self.accepted_kinds, "accepted_kind"))
+        if not isinstance(self.collector_route, CollectorRoute):
+            raise EvidenceRequestError(
+                "collector_route must be an explicit CollectorRoute"
+            )
+        kinds = _unique_text(self.accepted_kinds, "accepted_kind")
+        if not kinds:
+            raise EvidenceRequestError(
+                "an evidence requirement needs an accepted evidence kind"
+            )
+        object.__setattr__(self, "accepted_kinds", kinds)
 
     def to_dict(self) -> dict:
         return {
             "requirement_id": self.requirement_id,
             "description": self.description,
+            "collector_route": self.collector_route.to_dict(),
             "accepted_kinds": list(self.accepted_kinds),
         }
 
@@ -77,13 +155,12 @@ class EvidenceRequirement:
 class EvidenceRequestPolicy:
     """Bounds what an agent may try before a human becomes necessary.
 
-    Collection actions are descriptive scopes consumed by an external
-    orchestrator.  Listing one here does not grant permission to perform it;
-    the caller must authorize every collection action independently.
+    Every requirement carries a provider-neutral collector route and a
+    least-privilege action scope. Listing a route does not grant permission to
+    perform it; the caller must authorize every dispatch independently.
     """
 
     requirements: tuple[EvidenceRequirement, ...]
-    allowed_collection_actions: tuple[str, ...]
     max_rounds: int = 2
     max_evidence_items_per_round: int = 50
 
@@ -105,20 +182,15 @@ class EvidenceRequestPolicy:
             raise EvidenceRequestError(
                 "max_evidence_items_per_round must be an integer from 1 to 1000"
             )
-        object.__setattr__(self, "requirements", requirements)
-        actions = _unique_text(
-            self.allowed_collection_actions, "allowed_collection_action"
-        )
-        if not actions:
+        if self.max_evidence_items_per_round < len(requirements):
             raise EvidenceRequestError(
-                "at least one allowed collection action is required"
+                "max_evidence_items_per_round must cover every requirement"
             )
-        object.__setattr__(self, "allowed_collection_actions", actions)
+        object.__setattr__(self, "requirements", requirements)
 
     def payload(self) -> dict:
         return {
             "requirements": [item.to_dict() for item in self.requirements],
-            "allowed_collection_actions": list(self.allowed_collection_actions),
             "max_rounds": self.max_rounds,
             "max_evidence_items_per_round": self.max_evidence_items_per_round,
             "collection_scope_grants_authority": False,
@@ -143,8 +215,7 @@ class EvidenceRequest:
     max_rounds: int
     max_evidence_items: int
     requirements: tuple[EvidenceRequirement, ...]
-    allowed_collection_actions: tuple[str, ...]
-    previous_challenge_id: Optional[str] = None
+    previous_challenge_id: str | None = None
     schema: str = SCHEMA_VERSION
     grants_authority: bool = False
 
@@ -160,7 +231,6 @@ class EvidenceRequest:
             "max_rounds": self.max_rounds,
             "max_evidence_items": self.max_evidence_items,
             "requirements": [item.to_dict() for item in self.requirements],
-            "allowed_collection_actions": list(self.allowed_collection_actions),
             "previous_challenge_id": self.previous_challenge_id,
             "grants_authority": False,
         }
@@ -205,9 +275,6 @@ def validate_evidence_return(
             raise EvidenceRequestError(f"evidence return substituted {name}")
     policy_fields = {
         "requirements": (request.requirements, policy.requirements),
-        "allowed_collection_actions": (
-            request.allowed_collection_actions, policy.allowed_collection_actions
-        ),
         "max_rounds": (request.max_rounds, policy.max_rounds),
         "max_evidence_items": (
             request.max_evidence_items, policy.max_evidence_items_per_round
@@ -228,7 +295,7 @@ def issue_evidence_request(
     decision_subject: str,
     policy_id: str,
     reason_code: str,
-    previous: Optional[EvidenceRequest] = None,
+    previous: EvidenceRequest | None = None,
 ) -> EvidenceRequest:
     """Create the next hash-bound challenge or report budget exhaustion."""
     action_digest = _text(action_digest, "action_digest")
@@ -260,7 +327,6 @@ def issue_evidence_request(
         max_rounds=policy.max_rounds,
         max_evidence_items=policy.max_evidence_items_per_round,
         requirements=policy.requirements,
-        allowed_collection_actions=policy.allowed_collection_actions,
         previous_challenge_id=previous_id,
     )
     return replace(prototype, challenge_id=_digest(prototype.unsigned_payload()))

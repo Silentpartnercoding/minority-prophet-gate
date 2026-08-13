@@ -1,9 +1,10 @@
 """The Gate may ask an agent to collect evidence without granting authority."""
 
-from dataclasses import replace
 import unittest
+from dataclasses import replace
 
 from minority_prophet import (
+    CollectorRoute,
     DeterministicDecision,
     EvidenceRequestError,
     EvidenceRequestPolicy,
@@ -13,26 +14,36 @@ from minority_prophet import (
     verify_evidence_request,
 )
 
-
 ACTION_DIGEST = "sha256:action-v1"
 SUBJECT = "action-1"
 PRIMARY = DeterministicDecision(
     "review", "deployment requires current evidence", policy_id="deploy-policy-v3"
+)
+AGENT_ROUTE = CollectorRoute(
+    "requesting-agent-tests", "requesting_agent", "test.execution",
+    "candidate_evidence",
+    ("repository.read", "test.run"),
+)
+MP_ROUTE = CollectorRoute(
+    "provenance-analysis", "epistemic_service", "provenance.analysis",
+    "verification_artifact",
+    ("evidence.read", "provenance.analyze"),
 )
 POLICY = EvidenceRequestPolicy(
     requirements=(
         EvidenceRequirement(
             "fresh-test-receipt",
             "Collect fresh test-run receipts bound to this action",
+            AGENT_ROUTE,
             ("test.receipt",),
         ),
         EvidenceRequirement(
             "source-lineage",
             "Retain the source and derivation lineage for every returned claim",
+            MP_ROUTE,
             ("provenance.envelope",),
         ),
     ),
-    allowed_collection_actions=("repository.read", "test.run"),
     max_rounds=2,
     max_evidence_items_per_round=20,
 )
@@ -61,6 +72,10 @@ def evaluate(envelopes, *, prior=None, action_digest=ACTION_DIGEST,
 
 
 class EvidenceRequestLoopTests(unittest.TestCase):
+    def test_item_budget_must_cover_every_requirement(self):
+        with self.assertRaisesRegex(EvidenceRequestError, "cover every requirement"):
+            EvidenceRequestPolicy(POLICY.requirements, max_evidence_items_per_round=1)
+
     def test_missing_evidence_returns_a_bounded_non_authorizing_request(self):
         decision = evaluate([])
         request = decision.evidence_request
@@ -124,8 +139,14 @@ class EvidenceRequestLoopTests(unittest.TestCase):
     def test_policy_substitution_on_return_is_rejected(self):
         request = evaluate([]).evidence_request
         changed = EvidenceRequestPolicy(
-            POLICY.requirements,
-            ("repository.read", "network.search"),
+            (
+                POLICY.requirements[0],
+                replace(POLICY.requirements[1], collector_route=CollectorRoute(
+                    "provenance-analysis", "program", "provenance.analysis",
+                    "verification_artifact",
+                    ("network.search",),
+                )),
+            ),
             max_rounds=2,
         )
         with self.assertRaisesRegex(EvidenceRequestError, "policy_digest"):

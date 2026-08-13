@@ -265,7 +265,8 @@ evidence and return them for another complete Gate evaluation.
 
 ```python
 from minority_prophet import (
-    DeterministicDecision, EvidenceRequestPolicy, EvidenceRequirement,
+    CollectorRoute, DeterministicDecision,
+    EvidenceRequestPolicy, EvidenceRequirement,
     TrustAllVerifier, selective_decide,
 )
 
@@ -273,9 +274,13 @@ collection = EvidenceRequestPolicy(
     requirements=(EvidenceRequirement(
         "fresh-tests",
         "Collect fresh test-run receipts bound to this action",
+        CollectorRoute(
+            "requesting-agent-tests", "requesting_agent", "test.execution",
+            "candidate_evidence",
+            ("repository.read", "test.run"),
+        ),
         ("test.receipt",),
     ),),
-    allowed_collection_actions=("repository.read", "test.run"),
     max_rounds=2,
 )
 primary = DeterministicDecision(
@@ -318,6 +323,35 @@ effects. Keep issued challenges in a trusted durable ledger: the bundled hash
 identifies and binds request contents but is not a signature and cannot
 authenticate state supplied solely by an untrusted agent.
 
+### Vendor-neutral evidence router
+
+Each `EvidenceRequirement` carries an explicit `CollectorRoute`. Policy—not the
+requesting model—selects one of four neutral collector kinds:
+
+| Kind | Use |
+|---|---|
+| `requesting_agent` | Return `candidate_evidence` for ordinary Gate verification |
+| `epistemic_service` | Return a `verification_artifact`; an MP adapter may serve this route |
+| `human` | Produce a `human_handoff`, never a fabricated evidence root |
+| `program` | Return candidate evidence or a verification artifact, as policy specifies |
+
+`EvidenceRouter` selects adapters by route ID, collector kind, and capability.
+It rejects same-control-domain collectors when the route requires independence,
+and it requires a separately bound `CollectionAuthorization` before calling any
+adapter. An allowed collection action never authorizes the protected action.
+An epistemic-service result cannot carry an assertion: it informs the verifier
+how to classify the original evidence and is never counted as another vote.
+
+The router automatically writes hash-chained audit events for challenge receipt,
+route planning, authorization, dispatch intent, and collection return/failure;
+`record_gate_decision` appends the subsequent Gate handback. Returned evidence
+is stored separately and only its digest enters the audit log. The optional
+JSONL backend flushes and fsyncs each event; unresolved dispatches fail closed
+on retry.
+
+See [`EVIDENCE-ROUTING.md`](EVIDENCE-ROUTING.md) for the adapter contract,
+policy mapping, audit events, and production boundary.
+
 Evidence-sensitive policy may independently require both attack prices:
 `min_flip_budget` for newly forged opposing root mass and
 `min_conversions_to_reverse` for compromised winning roots. The latter is
@@ -349,6 +383,8 @@ minority_prophet/aggregator.py   # machine-checked core: Claim, EvidenceGraph, a
 minority_prophet/adapter_acp.py  # envelopes -> verified Claims (security model here)
 minority_prophet/gate.py         # decide(): proceed / block / escalate + flip_budget
 minority_prophet/evidence_request.py # bounded request-evidence challenge contract
+minority_prophet/evidence_audit.py # append-only hash-chained event log
+minority_prophet/evidence_router.py # neutral collector routing and dispatch
 minority_prophet/reconcile.py    # reconcile(): many status sources, one state
 minority_prophet/runtime_adapter.py # neutral prepare/execute-once/prevent boundary
 minority_prophet/runtime_integrations.py # in-process and idempotent HTTP adapters
