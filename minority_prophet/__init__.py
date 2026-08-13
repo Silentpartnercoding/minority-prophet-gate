@@ -15,7 +15,7 @@ from .evidence_audit import (
 )
 from .evidence_collectors import (
     ConstrainedSubprocessCollector,
-    HttpEpistemicCollector,
+    HttpEvidenceCollector,
     HumanQueueCollector,
 )
 from .evidence_ledger import AuthenticatedSqliteEvidenceLedger
@@ -84,7 +84,7 @@ __all__ = [
     "EvidenceRouter",
     "EvidenceRoutingError",
     "GateDecision",
-    "HttpEpistemicCollector",
+    "HttpEvidenceCollector",
     "HumanQueueCollector",
     "IdempotentHttpRuntime",
     "InProcessToolRuntime",

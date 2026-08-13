@@ -40,20 +40,19 @@ class HumanQueueCollector:
         )
 
 
-class HttpEpistemicCollector:
-    """Call a bound read-only epistemic service and return its receipt.
+class HttpEvidenceCollector:
+    """Call any service implementing the neutral evidence-collector contract.
 
-    The packet and proposal callbacks are application-owned.  The adapter sends
-    them directly over the configured transport; no model reconstructs or
-    rewrites the packet.  Remote hosts are denied unless explicitly opted in.
+    The Gate owns transport safety and exact dispatch binding. The configured
+    service owns its domain payload and evidence schema. Remote hosts are
+    denied unless explicitly opted in; remote plaintext HTTP is always denied.
     """
 
     def __init__(
         self,
         descriptor: CollectorDescriptor,
         endpoint: str,
-        packet_for: Callable[[EvidenceDispatch], dict],
-        proposal_for: Callable[[EvidenceDispatch], dict],
+        input_for: Callable[[EvidenceDispatch], dict],
         *,
         bearer_token: str,
         timeout_seconds: float = 10.0,
@@ -65,30 +64,27 @@ class HttpEpistemicCollector:
             raise EvidenceRoutingError("epistemic endpoint must be an HTTP(S) URL")
         if (not allow_remote and
                 parsed.hostname not in {"127.0.0.1", "localhost", "::1"}):
-            raise EvidenceRoutingError("remote epistemic endpoints require opt-in")
+            raise EvidenceRoutingError("remote evidence endpoints require opt-in")
+        if (allow_remote and parsed.scheme != "https" and
+                parsed.hostname not in {"127.0.0.1", "localhost", "::1"}):
+            raise EvidenceRoutingError("remote evidence endpoints require HTTPS")
         if not bearer_token:
-            raise EvidenceRoutingError("epistemic service bearer token is required")
+            raise EvidenceRoutingError("evidence service bearer token is required")
         self.descriptor = descriptor
         self.endpoint = endpoint
-        self.packet_for = packet_for
-        self.proposal_for = proposal_for
+        self.input_for = input_for
         self.bearer_token = bearer_token
         self.timeout_seconds = timeout_seconds
         self.max_response_bytes = max_response_bytes
 
     def collect(self, dispatch: EvidenceDispatch) -> EvidenceCollectionResult:
-        if self.descriptor.collector_kind != "epistemic_service":
-            raise EvidenceRoutingError(
-                "HTTP epistemic collector requires an epistemic_service descriptor"
-            )
+        service_input = self.input_for(dispatch)
+        if not isinstance(service_input, dict):
+            raise EvidenceRoutingError("evidence service input must be an object")
         request_body = {
-            "schema": "mp-provenance-service-request.v1",
-            "challenge_id": dispatch.challenge_id,
-            "dispatch_id": dispatch.dispatch_id,
-            "action_digest": dispatch.action_digest,
-            "decision_subject": dispatch.decision_subject,
-            "packet": self.packet_for(dispatch),
-            "proposal": self.proposal_for(dispatch),
+            "schema": "evidence-collector.request.v1",
+            "dispatch": dispatch.to_dict(),
+            "input": service_input,
             "grants_protected_action_authority": False,
         }
         request = urllib.request.Request(
@@ -105,61 +101,49 @@ class HttpEpistemicCollector:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
                 raw = response.read(self.max_response_bytes + 1)
         except (OSError, urllib.error.URLError) as exc:
-            raise EvidenceRoutingError("epistemic service request failed") from exc
+            raise EvidenceRoutingError("evidence service request failed") from exc
         if len(raw) > self.max_response_bytes:
-            raise EvidenceRoutingError("epistemic service response exceeded limit")
+            raise EvidenceRoutingError("evidence service response exceeded limit")
         try:
             parsed = json.loads(raw)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise EvidenceRoutingError("epistemic service returned invalid JSON") from exc
+            raise EvidenceRoutingError("evidence service returned invalid JSON") from exc
         expected = {
-            "schema": "mp-provenance-service-response.v1",
+            "schema": "evidence-collector.response.v1",
             "challenge_id": dispatch.challenge_id,
             "dispatch_id": dispatch.dispatch_id,
-            "action_digest": dispatch.action_digest,
-            "decision_subject": dispatch.decision_subject,
-            "output_role": "verification_artifact",
+            "collector_id": self.descriptor.collector_id,
             "grants_protected_action_authority": False,
         }
         if not isinstance(parsed, dict):
-            raise EvidenceRoutingError("epistemic service response must be an object")
+            raise EvidenceRoutingError("evidence service response must be an object")
         for key, value in expected.items():
             if parsed.get(key) != value:
-                raise EvidenceRoutingError(f"epistemic service substituted {key}")
-        receipt = parsed.get("receipt")
-        forbidden = {
-            "assertion", "answer", "correct_answer", "ground_truth",
-            "recommended_answer",
-        }
-        if (
-            not isinstance(receipt, dict)
-            or receipt.get("schema") != "mp-provenance-receipt.v1"
-            or receipt.get("answer_included") is not False
-            or receipt.get("ground_truth_included") is not False
-            or forbidden.intersection(receipt)
-        ):
-            raise EvidenceRoutingError("epistemic receipt is invalid")
-        items = tuple(
-            CollectedEvidence(
-                requirement.requirement_id,
-                requirement.accepted_kinds[0],
-                {
-                    **receipt,
-                    "attest": {
-                        "origin": self.descriptor.collector_id,
-                        "subject": dispatch.decision_subject,
-                        "evidence_kind": requirement.accepted_kinds[0],
-                    },
-                },
+                raise EvidenceRoutingError(f"evidence service substituted {key}")
+        raw_items = parsed.get("items")
+        if not isinstance(raw_items, list):
+            raise EvidenceRoutingError("evidence service items must be an array")
+        try:
+            items = tuple(
+                CollectedEvidence(
+                    item["requirement_id"],
+                    item["evidence_kind"],
+                    item["envelope"],
+                )
+                for item in raw_items
             )
-            for requirement in dispatch.requirements
-        )
+        except (KeyError, TypeError) as exc:
+            raise EvidenceRoutingError("evidence service item is invalid") from exc
+        diagnostics = parsed.get("diagnostics", {})
+        if not isinstance(diagnostics, dict):
+            raise EvidenceRoutingError("evidence service diagnostics must be an object")
         return EvidenceCollectionResult(
             dispatch.dispatch_id,
             dispatch.challenge_id,
             self.descriptor.collector_id,
-            "completed",
+            parsed.get("status", "failed"),
             items,
+            diagnostics,
         )
 
 

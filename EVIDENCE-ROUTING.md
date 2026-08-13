@@ -105,9 +105,10 @@ dispatches unresolved so they cannot silently run twice.
 
 Concrete neutral adapters are included for:
 
-- `HttpEpistemicCollector`: sends an exact packet and proposal to an
-  authenticated read-only receipt service. Loopback is required by default;
-  remote endpoints need explicit opt-in.
+- `HttpEvidenceCollector`: sends the exact bound dispatch and an opaque
+  service-owned input object through a neutral JSON contract. It contains no
+  Minority Prophet or provider schema. Loopback is required by default; remote
+  endpoints require explicit opt-in and HTTPS.
 - `HumanQueueCollector`: durably creates a pending handoff and returns
   `needs_human`; it cannot invent or convert a human decision.
 - `ConstrainedSubprocessCollector`: invokes one fixed command without a shell,

@@ -27,7 +27,7 @@ from minority_prophet import (
     EvidenceRequirement,
     EvidenceRouter,
     EvidenceRoutingError,
-    HttpEpistemicCollector,
+    HttpEvidenceCollector,
     HumanQueueCollector,
     TrustAllVerifier,
     issue_evidence_request,
@@ -705,30 +705,40 @@ class AuthenticatedLedgerAndAdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(EvidenceRoutingError, "digest changed"):
                 second.dispatch(dispatch)
 
-    def test_http_epistemic_adapter_enforces_bound_non_authorizing_response(self):
+    def test_http_adapter_enforces_neutral_bound_non_authorizing_response(self):
         class Handler(BaseHTTPRequestHandler):
-            leak_answer = False
+            substitute_dispatch = False
 
             def do_POST(self):
                 length = int(self.headers["content-length"])
                 body = json.loads(self.rfile.read(length))
+                dispatch = body["dispatch"]
                 response = {
-                    "schema": "mp-provenance-service-response.v1",
-                    "challenge_id": body["challenge_id"],
-                    "dispatch_id": body["dispatch_id"],
-                    "action_digest": body["action_digest"],
-                    "decision_subject": body["decision_subject"],
-                    "output_role": "verification_artifact",
-                    "receipt": {
-                        "schema": "mp-provenance-receipt.v1",
+                    "schema": "evidence-collector.response.v1",
+                    "challenge_id": dispatch["challenge_id"],
+                    "dispatch_id": dispatch["dispatch_id"],
+                    "collector_id": "service:epistemic",
+                    "status": "completed",
+                    "items": [{
+                        "requirement_id": dispatch["requirements"][0]["requirement_id"],
+                        "evidence_kind": dispatch["requirements"][0]["accepted_kinds"][0],
+                        "envelope": {
+                            "schema": "example-verification-artifact.v1",
+                            "input_digest": body["input"]["input_digest"],
+                            "attest": {
+                                "origin": "service:epistemic",
+                                "subject": dispatch["decision_subject"],
+                                "evidence_kind": dispatch["requirements"][0]["accepted_kinds"][0],
+                            },
+                        },
+                    }],
+                    "diagnostics": {
                         "status": "REVIEW_REQUIRED",
-                        "answer_included": False,
-                        "ground_truth_included": False,
                     },
                     "grants_protected_action_authority": False,
                 }
-                if self.leak_answer:
-                    response["receipt"]["correct_answer"] = "must-not-cross-boundary"
+                if self.substitute_dispatch:
+                    response["dispatch_id"] = "dispatch:substituted"
                 rendered = json.dumps(response).encode()
                 self.send_response(200)
                 self.send_header("content-type", "application/json")
@@ -744,14 +754,10 @@ class AuthenticatedLedgerAndAdapterTests(unittest.TestCase):
         thread.start()
         try:
             route = ROUTES["mp"]
-            collector = HttpEpistemicCollector(
+            collector = HttpEvidenceCollector(
                 descriptor(route, "service:epistemic", "control:epistemic-service"),
                 f"http://127.0.0.1:{server.server_port}/internal/provenance/compile",
-                lambda dispatch: {"documents": []},
-                lambda dispatch: {
-                    "schema": "mp-lineage-proposal.v1", "links": [],
-                    "unresolved_document_ids": [], "summary": "No links",
-                },
+                lambda dispatch: {"input_digest": dispatch.action_digest},
                 bearer_token="local-test-token",
             )
             router = EvidenceRouter(
@@ -763,13 +769,14 @@ class AuthenticatedLedgerAndAdapterTests(unittest.TestCase):
             )[0]
             self.assertEqual(result.status, "completed")
             self.assertNotIn("assertion", result.envelopes[0])
-            self.assertEqual(result.envelopes[0]["answer_included"], False)
+            self.assertEqual(result.envelopes[0]["schema"],
+                             "example-verification-artifact.v1")
 
-            Handler.leak_answer = True
+            Handler.substitute_dispatch = True
             rejecting_router = EvidenceRouter(
                 {route.route_id: collector}, BoundAuthorizer(), EvidenceAuditLog()
             )
-            with self.assertRaisesRegex(EvidenceRoutingError, "receipt is invalid"):
+            with self.assertRaisesRegex(EvidenceRoutingError, "substituted dispatch_id"):
                 rejecting_router.collect(
                     request((REQUIREMENTS[1],)),
                     requester_control_domain=REQUESTER_DOMAIN,
@@ -778,6 +785,13 @@ class AuthenticatedLedgerAndAdapterTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+    def test_http_adapter_source_contains_no_minority_prophet_contract(self):
+        source = (Path(__file__).parents[1] / "minority_prophet" /
+                  "evidence_collectors.py").read_text()
+        self.assertNotIn("mp-provenance", source)
+        self.assertNotIn("mp-lineage", source)
+        self.assertNotIn("correct_answer", source)
 
 
 if __name__ == "__main__":
