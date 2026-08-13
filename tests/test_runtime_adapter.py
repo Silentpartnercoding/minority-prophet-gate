@@ -39,6 +39,21 @@ class FakeRuntime:
 
 
 class RuntimeAdapterTests(unittest.TestCase):
+    def test_action_binding_digest_covers_the_frozen_runtime_fingerprint(self):
+        original = action()
+        self.assertEqual(original.binding_digest, action().binding_digest)
+        for changed in (
+            RuntimeAction("a-2", original.action_type, original.target,
+                          original.payload_digest, original.idempotency_key),
+            RuntimeAction(original.action_id, "other.call", original.target,
+                          original.payload_digest, original.idempotency_key),
+            RuntimeAction(original.action_id, original.action_type, "tool:other",
+                          original.payload_digest, original.idempotency_key),
+            action(digest="sha256:different"),
+        ):
+            with self.subTest(changed=changed):
+                self.assertNotEqual(original.binding_digest, changed.binding_digest)
+
     def test_proceed_executes_exactly_once_across_retries(self):
         runtime = FakeRuntime()
         controller = RuntimeController()
@@ -53,6 +68,18 @@ class RuntimeAdapterTests(unittest.TestCase):
             receipt = RuntimeController().apply(decision(gate_action), action(), runtime)
             self.assertEqual(receipt.attempt_count, 0)
             self.assertEqual((runtime.prepared, runtime.executed, runtime.prevented), (0, 0, 1))
+
+    def test_request_evidence_cannot_reach_the_protected_runtime(self):
+        runtime = FakeRuntime()
+        controller = RuntimeController()
+        with self.assertRaisesRegex(RuntimeBoundaryError, "non-final"):
+            controller.apply(decision("request_evidence"), action(), runtime)
+        self.assertEqual((runtime.prepared, runtime.executed, runtime.prevented), (0, 0, 0))
+
+        # The non-final outcome must not consume the action's idempotency key.
+        receipt = controller.apply(decision("proceed"), action(), runtime)
+        self.assertEqual(receipt.status, "succeeded")
+        self.assertEqual(runtime.executed, 1)
 
     def test_idempotency_key_cannot_be_reused_for_another_action(self):
         runtime = FakeRuntime()

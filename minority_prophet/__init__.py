@@ -18,6 +18,16 @@ from .runtime_adapter import (
     RuntimeReceipt,
 )
 from .runtime_integrations import IdempotentHttpRuntime, InProcessToolRuntime
+from .evidence_request import (
+    EvidenceRequest,
+    EvidenceRequestError,
+    EvidenceRequestExhausted,
+    EvidenceRequestPolicy,
+    EvidenceRequirement,
+    issue_evidence_request,
+    validate_evidence_return,
+    verify_evidence_request,
+)
 from .selective_hybrid import DeterministicDecision, SelectiveDecision, selective_decide
 from .memory_evidence import MemoryEvidenceAssessment, assess_memory_evidence
 
@@ -29,5 +39,9 @@ __all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
            "RuntimeAction", "RuntimeAdapter", "RuntimeBoundaryError",
            "RuntimeController", "RuntimeReceipt",
            "IdempotentHttpRuntime", "InProcessToolRuntime",
+           "EvidenceRequest", "EvidenceRequestError", "EvidenceRequestExhausted",
+           "EvidenceRequestPolicy", "EvidenceRequirement",
+           "issue_evidence_request", "validate_evidence_return",
+           "verify_evidence_request",
            "DeterministicDecision", "SelectiveDecision", "selective_decide",
            "MemoryEvidenceAssessment", "assess_memory_evidence"]

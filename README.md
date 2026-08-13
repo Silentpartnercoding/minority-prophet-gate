@@ -253,8 +253,70 @@ observation time under a freshness policy is excluded conservatively.
 and denies do not invoke the provenance challenger. Only an action marked
 evidence-sensitive (or returned as `review`) enters independent-root
 assessment. Contradictory evidence blocks; balanced, missing, or thin evidence
-escalates to a separately authorized human. Escalation is not permission, and
-evidence cannot override a deterministic deny.
+escalates to a separately authorized human by default. Escalation is not
+permission, and evidence cannot override a deterministic deny.
+
+### Bounded evidence collection
+
+An operator may opt unresolved decisions into a fourth selective outcome:
+`request_evidence`. This means **not yet**. The protected action remains frozen
+while an external orchestrator asks the agent to collect specified kinds of
+evidence and return them for another complete Gate evaluation.
+
+```python
+from minority_prophet import (
+    DeterministicDecision, EvidenceRequestPolicy, EvidenceRequirement,
+    TrustAllVerifier, selective_decide,
+)
+
+collection = EvidenceRequestPolicy(
+    requirements=(EvidenceRequirement(
+        "fresh-tests",
+        "Collect fresh test-run receipts bound to this action",
+        ("test.receipt",),
+    ),),
+    allowed_collection_actions=("repository.read", "test.run"),
+    max_rounds=2,
+)
+primary = DeterministicDecision(
+    "review", "current evidence required", policy_id="deploy-policy-v3",
+)
+first = selective_decide(
+    primary, [], TrustAllVerifier(),
+    decision_subject="deploy:123",
+    action_digest="sha256:exact-action-payload",
+    evidence_request_policy=collection,
+)
+assert first.action == "request_evidence"
+assert first.evidence_request.grants_authority is False
+
+# The orchestrator performs only separately authorized collection, retains the
+# original request in trusted state, and returns new attested envelopes.
+final = selective_decide(
+    primary, returned_envelopes, production_verifier,
+    decision_subject="deploy:123",
+    action_digest="sha256:exact-action-payload",
+    evidence_request_policy=collection,
+    prior_evidence_request=first.evidence_request,
+)
+```
+
+Each challenge is bound to the exact action digest, decision subject, policy
+identifier, policy contents, and collection round. It includes a hash-chain ID,
+neutral evidence requirements, collection scopes, an item cap, and a round cap.
+The requirements describe observations to obtain; they must not tell the agent
+which conclusion to prove. When the round budget is exhausted, the route becomes
+human escalation. A contradictory result blocks normally.
+
+When using the bundled runtime contract, pass `RuntimeAction.binding_digest` as
+`action_digest`; it covers the action ID, type, target, and payload digest.
+
+The allowed collection list is **not an authority grant**. Each search, read,
+probe, or test still needs authorization from the surrounding system. The
+protected runtime rejects `request_evidence` as non-final and performs zero
+effects. Keep issued challenges in a trusted durable ledger: the bundled hash
+identifies and binds request contents but is not a signature and cannot
+authenticate state supplied solely by an untrusted agent.
 
 Evidence-sensitive policy may independently require both attack prices:
 `min_flip_budget` for newly forged opposing root mass and
@@ -286,6 +348,7 @@ result, and we will credit and publish it.
 minority_prophet/aggregator.py   # machine-checked core: Claim, EvidenceGraph, aggregate()
 minority_prophet/adapter_acp.py  # envelopes -> verified Claims (security model here)
 minority_prophet/gate.py         # decide(): proceed / block / escalate + flip_budget
+minority_prophet/evidence_request.py # bounded request-evidence challenge contract
 minority_prophet/reconcile.py    # reconcile(): many status sources, one state
 minority_prophet/runtime_adapter.py # neutral prepare/execute-once/prevent boundary
 minority_prophet/runtime_integrations.py # in-process and idempotent HTTP adapters

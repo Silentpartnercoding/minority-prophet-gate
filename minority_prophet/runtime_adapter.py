@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
+import json
 from typing import Any, Protocol
 
 from .gate import GateDecision
@@ -29,6 +31,18 @@ class RuntimeAction:
     @property
     def fingerprint(self) -> tuple[str, str, str, str]:
         return (self.action_id, self.action_type, self.target, self.payload_digest)
+
+    @property
+    def binding_digest(self) -> str:
+        """Canonical digest callers can bind an evidence challenge to."""
+        payload = {
+            "action_id": self.action_id,
+            "action_type": self.action_type,
+            "target": self.target,
+            "payload_digest": self.payload_digest,
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -107,6 +121,15 @@ class RuntimeController:
             # prevent() performs no effect, so there is no window to protect.
             receipt = adapter.prevent(action, decision.action)
             self._validate_receipt(action, receipt, expected_status="prevented", attempts=0)
+        elif decision.action == "request_evidence":
+            # This is intentionally not recorded as a terminal prevention: the
+            # orchestrator may return with evidence and a new final decision for
+            # the same frozen action.  Collection is a separate, independently
+            # authorized workflow and must never reach the protected runtime.
+            raise RuntimeBoundaryError(
+                "request_evidence is non-final and grants no execution authority; "
+                "return it to the evidence-collection orchestrator"
+            )
         else:
             raise RuntimeBoundaryError(f"unknown Gate action: {decision.action}")
 

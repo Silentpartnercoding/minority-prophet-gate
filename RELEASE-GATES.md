@@ -15,6 +15,11 @@ The following are release blockers, not aspirational design notes.
 3. **Known infrastructure gaps:** revocation-aware verification, a clock
    authority option for cross-organization freshness, and continuous spool
    chain-break monitoring require explicit designs before a production claim.
+4. **Durable evidence-challenge state:** deployments using `request_evidence`
+   must retain issued challenges in a trusted durable ledger and authenticate
+   resumption against that state. The public hash-chain identifier detects
+   accidental drift and binds fields; it is not a signature and cannot make a
+   challenge returned solely by an untrusted agent authoritative.
 
 The mathematical core is distinct from these integration gates. A passing core
 test suite does not establish that a deployment has authentic roots.
