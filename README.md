@@ -323,6 +323,58 @@ effects. Keep issued challenges in a trusted durable ledger: the bundled hash
 identifies and binds request contents but is not a signature and cannot
 authenticate state supplied solely by an untrusted agent.
 
+### Drop-in evidence-control plane
+
+`EvidenceControlPlane` closes the orchestration gap for an embedded install. It
+sits in front of one consequential runtime boundary and runs this bounded loop:
+
+```text
+frozen action
+  -> deterministic policy + Minority Prophet Gate
+  -> proceed / block / escalate -----------------------> runtime adapter
+  -> request_evidence -> authorized collectors -> verifier -> Gate again
+```
+
+Only a final Gate outcome reaches `RuntimeController`. A collection request,
+collector permit, returned artifact, or verification artifact cannot execute
+the protected action. Every challenge retains the exact
+`RuntimeAction.binding_digest`, and the controller preserves the existing
+exactly-once runtime boundary.
+
+```python
+from minority_prophet import (
+    CandidateEvidenceBridge, EvidenceControlPlane, EvidenceControlPolicy,
+    RuntimeController, VerifiedEvidenceBatch,
+)
+
+plane = EvidenceControlPlane(
+    evidence_router,
+    CandidateEvidenceBridge(production_attestation_verifier),
+    RuntimeController(),
+)
+outcome = plane.run(
+    frozen_runtime_action,
+    EvidenceControlPolicy(
+        deterministic_policy, evidence_request_policy,
+        decision_subject="deploy:123",
+        requester_control_domain="agent:orchestrator",
+    ),
+    VerifiedEvidenceBatch(initial_envelopes, production_attestation_verifier),
+    customer_runtime_adapter,
+)
+```
+
+`CandidateEvidenceBridge` is the light path: candidate assertions return to
+Gate and are classified by the injected verifier. `TrustAllVerifier` is not a
+deployment verifier. A hardened installation may put Minority Prophet Border
+or another admission service on the evidence-input side. Admitted evidence
+still returns to Gate for the decision; Border never replaces Gate or runtime
+enforcement.
+
+The shim does not require a particular model, agent framework, cloud, evidence
+service, or runtime. Integrators implement the small collector, verifier, and
+runtime protocols.
+
 ### Vendor-neutral evidence router
 
 Each `EvidenceRequirement` carries an explicit `CollectorRoute`. Policy—not the

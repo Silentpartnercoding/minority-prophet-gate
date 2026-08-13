@@ -6,7 +6,12 @@ side-preserving AND root-preserving lineage corruption, and the margin flip
 condition. FORMAL.md gives the pointers; the normative hypotheses are the theorem
 ledger in the research repository, not this docstring.
 """
-from .adapter_acp import AttestationVerifier, TrustAllVerifier, envelopes_to_claims
+from .adapter_acp import (
+    AttestationVerifier,
+    CallbackVerifier,
+    TrustAllVerifier,
+    envelopes_to_claims,
+)
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
 from .evidence_audit import (
     EvidenceAuditEvent,
@@ -17,6 +22,14 @@ from .evidence_collectors import (
     ConstrainedSubprocessCollector,
     HttpEvidenceCollector,
     HumanQueueCollector,
+)
+from .control_plane import (
+    CandidateEvidenceBridge,
+    EvidenceControlOutcome,
+    EvidenceControlPlane,
+    EvidenceControlPolicy,
+    EvidenceVerifierBridge,
+    VerifiedEvidenceBatch,
 )
 from .evidence_ledger import AuthenticatedSqliteEvidenceLedger
 from .evidence_request import (
@@ -60,6 +73,8 @@ __all__ = [
     "AttestationVerifier",
     "AuthenticatedSqliteEvidenceLedger",
     "CallbackEvidenceCollector",
+    "CallbackVerifier",
+    "CandidateEvidenceBridge",
     "Claim",
     "CollectedEvidence",
     "CollectionAuthorization",
@@ -68,6 +83,9 @@ __all__ = [
     "CollectorRoute",
     "ConstrainedSubprocessCollector",
     "DeterministicDecision",
+    "EvidenceControlOutcome",
+    "EvidenceControlPlane",
+    "EvidenceControlPolicy",
     "EvidenceArtifactStore",
     "EvidenceAssessment",
     "EvidenceAuditEvent",
@@ -83,6 +101,7 @@ __all__ = [
     "EvidenceRequirement",
     "EvidenceRouter",
     "EvidenceRoutingError",
+    "EvidenceVerifierBridge",
     "GateDecision",
     "HttpEvidenceCollector",
     "HumanQueueCollector",
@@ -98,6 +117,7 @@ __all__ = [
     "StateVerdict",
     "TrustAllVerifier",
     "Verdict",
+    "VerifiedEvidenceBatch",
     "aggregate",
     "assess",
     "assess_memory_evidence",
