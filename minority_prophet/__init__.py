@@ -6,10 +6,45 @@ side-preserving AND root-preserving lineage corruption, and the margin flip
 condition. FORMAL.md gives the pointers; the normative hypotheses are the theorem
 ledger in the research repository, not this docstring.
 """
-from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
-from .reconcile import StateVerdict, reconcile
 from .adapter_acp import AttestationVerifier, TrustAllVerifier, envelopes_to_claims
+from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
+from .evidence_audit import (
+    EvidenceAuditEvent,
+    EvidenceAuditLog,
+    EvidenceRoutingError,
+)
+from .evidence_collectors import (
+    ConstrainedSubprocessCollector,
+    HttpEvidenceCollector,
+    HumanQueueCollector,
+)
+from .evidence_ledger import AuthenticatedSqliteEvidenceLedger
+from .evidence_request import (
+    CollectorRoute,
+    EvidenceRequest,
+    EvidenceRequestError,
+    EvidenceRequestExhausted,
+    EvidenceRequestPolicy,
+    EvidenceRequirement,
+    issue_evidence_request,
+    validate_evidence_return,
+    verify_evidence_request,
+)
+from .evidence_router import (
+    CallbackEvidenceCollector,
+    CollectedEvidence,
+    CollectionAuthorization,
+    CollectionAuthorizer,
+    CollectorDescriptor,
+    EvidenceArtifactStore,
+    EvidenceCollectionResult,
+    EvidenceCollector,
+    EvidenceDispatch,
+    EvidenceRouter,
+)
 from .gate import EvidenceAssessment, GateDecision, assess, decide
+from .memory_evidence import MemoryEvidenceAssessment, assess_memory_evidence
+from .reconcile import StateVerdict, reconcile
 from .runtime_adapter import (
     RuntimeAction,
     RuntimeAdapter,
@@ -19,15 +54,58 @@ from .runtime_adapter import (
 )
 from .runtime_integrations import IdempotentHttpRuntime, InProcessToolRuntime
 from .selective_hybrid import DeterministicDecision, SelectiveDecision, selective_decide
-from .memory_evidence import MemoryEvidenceAssessment, assess_memory_evidence
 
 __version__ = "0.1.0"
-__all__ = ["Claim", "EvidenceGraph", "Verdict", "aggregate",
-           "StateVerdict", "reconcile",
-           "AttestationVerifier", "TrustAllVerifier", "envelopes_to_claims",
-           "EvidenceAssessment", "GateDecision", "assess", "decide",
-           "RuntimeAction", "RuntimeAdapter", "RuntimeBoundaryError",
-           "RuntimeController", "RuntimeReceipt",
-           "IdempotentHttpRuntime", "InProcessToolRuntime",
-           "DeterministicDecision", "SelectiveDecision", "selective_decide",
-           "MemoryEvidenceAssessment", "assess_memory_evidence"]
+__all__ = [
+    "AttestationVerifier",
+    "AuthenticatedSqliteEvidenceLedger",
+    "CallbackEvidenceCollector",
+    "Claim",
+    "CollectedEvidence",
+    "CollectionAuthorization",
+    "CollectionAuthorizer",
+    "CollectorDescriptor",
+    "CollectorRoute",
+    "ConstrainedSubprocessCollector",
+    "DeterministicDecision",
+    "EvidenceArtifactStore",
+    "EvidenceAssessment",
+    "EvidenceAuditEvent",
+    "EvidenceAuditLog",
+    "EvidenceCollectionResult",
+    "EvidenceCollector",
+    "EvidenceDispatch",
+    "EvidenceGraph",
+    "EvidenceRequest",
+    "EvidenceRequestError",
+    "EvidenceRequestExhausted",
+    "EvidenceRequestPolicy",
+    "EvidenceRequirement",
+    "EvidenceRouter",
+    "EvidenceRoutingError",
+    "GateDecision",
+    "HttpEvidenceCollector",
+    "HumanQueueCollector",
+    "IdempotentHttpRuntime",
+    "InProcessToolRuntime",
+    "MemoryEvidenceAssessment",
+    "RuntimeAction",
+    "RuntimeAdapter",
+    "RuntimeBoundaryError",
+    "RuntimeController",
+    "RuntimeReceipt",
+    "SelectiveDecision",
+    "StateVerdict",
+    "TrustAllVerifier",
+    "Verdict",
+    "aggregate",
+    "assess",
+    "assess_memory_evidence",
+    "decide",
+    "envelopes_to_claims",
+    "issue_evidence_request",
+    "reconcile",
+    "selective_decide",
+    "validate_evidence_return",
+    "verify_evidence_request",
+]
