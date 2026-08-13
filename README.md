@@ -1,5 +1,27 @@
 # Minority Prophet Gate
 
+> **An evidence-control plane for consequential agent actions.** It lets clear
+> policy decisions move quickly, demands verifiable evidence when uncertainty
+> matters, counts independent evidence rather than repeated AI opinions, and
+> prevents unsupported actions from reaching a runtime. It is vendor-neutral
+> and can be embedded without replacing an existing model or agent framework.
+
+## Bring your own mess
+
+People and coding agents can attack the engine with their own JSON or JSONL—no
+API key or real runtime required:
+
+```bash
+python -m minority_prophet.byom_cli evaluate \
+  --evidence examples/byom/messy-evidence.jsonl \
+  --policy examples/byom/policy.json \
+  --feedback byom-feedback.json
+```
+
+The command is simulation-only and always performs zero runtime effects. Read
+[`AGENT-QUICKSTART.md`](AGENT-QUICKSTART.md) for the agent handoff contract,
+input format, adversarial ideas, and privacy-safe feedback workflow.
+
 **Refuse manufactured consensus.** A drop-in gate for multi-agent systems that
 counts *independent, attested evidence roots* instead of voices — so seven
 agents repeating one unverified guess can never outvote two agents who
