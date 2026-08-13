@@ -95,6 +95,28 @@ not as a multi-process transactional ledger. Event hashes detect drift; without
 an external integrity authority they do not prevent an attacker from rewriting
 the entire file and recomputing every hash.
 
-Production integrations must persist the returned evidence artifacts separately
-by digest, authenticate challenge state, protect the control-domain registry,
-and provide transactional or otherwise reconciled dispatch semantics.
+`AuthenticatedSqliteEvidenceLedger` is the stronger local implementation. It
+uses SQLite transactions for the event chain, derived dispatch state, evidence
+artifacts, and pending human-review records. Every event and artifact is bound
+with HMAC-SHA256 under a caller-supplied key that is never stored in the
+database. It verifies the complete chain and derived state on reopen, stores
+returned evidence by digest outside audit-event bodies, and leaves interrupted
+dispatches unresolved so they cannot silently run twice.
+
+Concrete neutral adapters are included for:
+
+- `HttpEpistemicCollector`: sends an exact packet and proposal to an
+  authenticated read-only receipt service. Loopback is required by default;
+  remote endpoints need explicit opt-in.
+- `HumanQueueCollector`: durably creates a pending handoff and returns
+  `needs_human`; it cannot invent or convert a human decision.
+- `ConstrainedSubprocessCollector`: invokes one fixed command without a shell,
+  checks every configured executable/script digest, uses JSON stdin/stdout,
+  and applies time and response-size limits.
+
+The subprocess adapter pins program identity and invocation. It is not an OS
+sandbox: filesystem, network, syscall, and resource isolation must still be
+provided by the embedding deployment. Likewise, the SQLite HMAC boundary is
+only as strong as external key custody and host integrity. Live URLs, keys,
+human identity, control-domain registry protection, and deployment policy are
+configuration responsibilities and are deliberately absent from this repo.

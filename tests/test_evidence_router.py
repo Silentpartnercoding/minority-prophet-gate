@@ -1,18 +1,25 @@
 """Vendor-neutral evidence routing, authorization, and durable audit tests."""
 
+import hashlib
 import json
+import sqlite3
+import sys
+import threading
 import unittest
 from dataclasses import replace
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
 from minority_prophet import (
+    AuthenticatedSqliteEvidenceLedger,
     CallbackEvidenceCollector,
     CollectedEvidence,
     CollectionAuthorization,
     CollectorDescriptor,
     CollectorRoute,
+    ConstrainedSubprocessCollector,
     DeterministicDecision,
     EvidenceAuditLog,
     EvidenceCollectionResult,
@@ -20,6 +27,8 @@ from minority_prophet import (
     EvidenceRequirement,
     EvidenceRouter,
     EvidenceRoutingError,
+    HttpEpistemicCollector,
+    HumanQueueCollector,
     TrustAllVerifier,
     issue_evidence_request,
     selective_decide,
@@ -576,6 +585,199 @@ class EvidenceAuditLogTests(unittest.TestCase):
         self.assertEqual(event.details["nested"]["value"], 1)
         event.details["nested"]["value"] = 500
         self.assertEqual(log.events[0].details["nested"]["value"], 1)
+
+
+class AuthenticatedLedgerAndAdapterTests(unittest.TestCase):
+    KEY = b"local-test-authentication-key-32-bytes-minimum"
+
+    def test_sqlite_ledger_persists_authenticated_audit_and_evidence(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "evidence.sqlite3"
+            with AuthenticatedSqliteEvidenceLedger(path, self.KEY) as ledger:
+                route = ROUTES["agent"]
+                router = EvidenceRouter(
+                    {route.route_id: completed_collector(
+                        route, "agent:original", REQUESTER_DOMAIN
+                    )},
+                    BoundAuthorizer(),
+                    ledger,
+                    artifact_store=ledger,
+                )
+                result = router.collect(
+                    request((REQUIREMENTS[0],)),
+                    requester_control_domain=REQUESTER_DOMAIN,
+                )[0]
+                digest = result.items[0].digest
+                artifact = ledger.artifact(digest)
+                self.assertEqual(artifact["dispatch_id"], result.dispatch_id)
+                self.assertEqual(artifact["envelope"]["assertion"], "SAFE")
+                self.assertEqual(ledger.events[-1].event_type, "collection_returned")
+
+            with AuthenticatedSqliteEvidenceLedger(path, self.KEY) as reopened:
+                self.assertEqual(reopened.artifact(digest)["evidence_digest"], digest)
+                self.assertTrue(reopened.has("collection_returned", result.dispatch_id))
+
+    def test_rewritten_authenticated_event_fails_closed(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "evidence.sqlite3"
+            with AuthenticatedSqliteEvidenceLedger(path, self.KEY) as ledger:
+                ledger.append("challenge_received", "challenge:1", details={"round": 1})
+            connection = sqlite3.connect(path)
+            connection.execute(
+                "UPDATE audit_events SET event_json = replace(event_json, '\"round\":1', '\"round\":9')"
+            )
+            connection.commit()
+            connection.close()
+            with self.assertRaisesRegex(EvidenceRoutingError, "hash|authentication"):
+                AuthenticatedSqliteEvidenceLedger(path, self.KEY)
+
+    def test_human_queue_is_durable_and_does_not_invent_a_decision(self):
+        with (
+            TemporaryDirectory() as directory,
+            AuthenticatedSqliteEvidenceLedger(
+                Path(directory) / "evidence.sqlite3", self.KEY
+            ) as ledger,
+        ):
+            route = ROUTES["human"]
+            collector = HumanQueueCollector(
+                descriptor(route, "queue:human", "control:human-review"), ledger
+            )
+            router = EvidenceRouter(
+                {route.route_id: collector},
+                BoundAuthorizer(),
+                ledger,
+                artifact_store=ledger,
+            )
+            result = router.collect(
+                request((REQUIREMENTS[2],)),
+                requester_control_domain=REQUESTER_DOMAIN,
+            )[0]
+            pending = ledger.pending_human_reviews()
+            self.assertEqual(result.status, "needs_human")
+            self.assertEqual(result.items, ())
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(pending[0]["status"], "PENDING")
+
+    def test_program_adapter_runs_only_a_fixed_hashed_command(self):
+        with TemporaryDirectory() as directory:
+            script = Path(directory) / "collector.py"
+            script.write_text(
+                "import json, sys\n"
+                "request = json.load(sys.stdin)\n"
+                "dispatch = request['dispatch']\n"
+                "req = dispatch['requirements'][0]\n"
+                "kind = req['accepted_kinds'][0]\n"
+                "json.dump({'schema':'test-program.v1','status':'completed','items':["
+                "{'requirement_id':req['requirement_id'],'evidence_kind':kind,'envelope':{"
+                "'claim_id':'claim:program','assertion':'SAFE','attest':{"
+                "'origin':'program:verifier','subject':dispatch['decision_subject'],"
+                "'evidence_kind':kind}}}]}, sys.stdout)\n"
+            )
+            executable = str(Path(sys.executable).resolve())
+            hashes = {
+                executable: hashlib.sha256(Path(executable).read_bytes()).hexdigest(),
+                str(script): hashlib.sha256(script.read_bytes()).hexdigest(),
+            }
+            route = ROUTES["program"]
+            collector = ConstrainedSubprocessCollector(
+                descriptor(route, "program:verifier", "control:external-verifier"),
+                (executable, str(script)),
+                hashes,
+            )
+            router = EvidenceRouter(
+                {route.route_id: collector}, BoundAuthorizer(), EvidenceAuditLog()
+            )
+            result = router.collect(
+                request((REQUIREMENTS[3],)),
+                requester_control_domain=REQUESTER_DOMAIN,
+            )[0]
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(result.items[0].envelope["assertion"], "SAFE")
+
+            script.write_text(script.read_text() + "# changed\n")
+            second = EvidenceRouter(
+                {route.route_id: collector}, BoundAuthorizer(), EvidenceAuditLog()
+            )
+            dispatch = second.plan(
+                request((REQUIREMENTS[3],)),
+                requester_control_domain=REQUESTER_DOMAIN,
+            )[0]
+            with self.assertRaisesRegex(EvidenceRoutingError, "digest changed"):
+                second.dispatch(dispatch)
+
+    def test_http_epistemic_adapter_enforces_bound_non_authorizing_response(self):
+        class Handler(BaseHTTPRequestHandler):
+            leak_answer = False
+
+            def do_POST(self):
+                length = int(self.headers["content-length"])
+                body = json.loads(self.rfile.read(length))
+                response = {
+                    "schema": "mp-provenance-service-response.v1",
+                    "challenge_id": body["challenge_id"],
+                    "dispatch_id": body["dispatch_id"],
+                    "action_digest": body["action_digest"],
+                    "decision_subject": body["decision_subject"],
+                    "output_role": "verification_artifact",
+                    "receipt": {
+                        "schema": "mp-provenance-receipt.v1",
+                        "status": "REVIEW_REQUIRED",
+                        "answer_included": False,
+                        "ground_truth_included": False,
+                    },
+                    "grants_protected_action_authority": False,
+                }
+                if self.leak_answer:
+                    response["receipt"]["correct_answer"] = "must-not-cross-boundary"
+                rendered = json.dumps(response).encode()
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(rendered)))
+                self.end_headers()
+                self.wfile.write(rendered)
+
+            def log_message(self, *_):
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            route = ROUTES["mp"]
+            collector = HttpEpistemicCollector(
+                descriptor(route, "service:epistemic", "control:epistemic-service"),
+                f"http://127.0.0.1:{server.server_port}/internal/provenance/compile",
+                lambda dispatch: {"documents": []},
+                lambda dispatch: {
+                    "schema": "mp-lineage-proposal.v1", "links": [],
+                    "unresolved_document_ids": [], "summary": "No links",
+                },
+                bearer_token="local-test-token",
+            )
+            router = EvidenceRouter(
+                {route.route_id: collector}, BoundAuthorizer(), EvidenceAuditLog()
+            )
+            result = router.collect(
+                request((REQUIREMENTS[1],)),
+                requester_control_domain=REQUESTER_DOMAIN,
+            )[0]
+            self.assertEqual(result.status, "completed")
+            self.assertNotIn("assertion", result.envelopes[0])
+            self.assertEqual(result.envelopes[0]["answer_included"], False)
+
+            Handler.leak_answer = True
+            rejecting_router = EvidenceRouter(
+                {route.route_id: collector}, BoundAuthorizer(), EvidenceAuditLog()
+            )
+            with self.assertRaisesRegex(EvidenceRoutingError, "receipt is invalid"):
+                rejecting_router.collect(
+                    request((REQUIREMENTS[1],)),
+                    requester_control_domain=REQUESTER_DOMAIN,
+                )
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
 
 
 if __name__ == "__main__":

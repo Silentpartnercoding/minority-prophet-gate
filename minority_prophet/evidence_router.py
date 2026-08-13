@@ -161,6 +161,13 @@ class CollectionAuthorizer(Protocol):
         """Return a separately authorized, exactly bound collection permit."""
 
 
+class EvidenceArtifactStore(Protocol):
+    def persist_collection_result(
+        self, dispatch: EvidenceDispatch, result: EvidenceCollectionResult
+    ) -> None:
+        """Durably store verified evidence separately from the audit event."""
+
+
 class CallbackEvidenceCollector:
     """Small adapter for an agent, MP service, human queue, or other program."""
 
@@ -182,10 +189,12 @@ class EvidenceRouter:
 
     def __init__(self, collectors: dict[str, EvidenceCollector],
                  authorizer: CollectionAuthorizer,
-                 audit_log: EvidenceAuditLog) -> None:
+                 audit_log: EvidenceAuditLog,
+                 artifact_store: EvidenceArtifactStore | None = None) -> None:
         self.collectors = dict(collectors)
         self.authorizer = authorizer
         self.audit_log = audit_log
+        self.artifact_store = artifact_store
         self._results: dict[str, EvidenceCollectionResult] = {}
 
     def plan(self, request: EvidenceRequest, *,
@@ -465,6 +474,8 @@ class EvidenceRouter:
         try:
             result = collector.collect(dispatch)
             self._verify_result(dispatch, descriptor, result)
+            if self.artifact_store is not None:
+                self.artifact_store.persist_collection_result(dispatch, result)
         except Exception as exc:
             self.audit_log.append(
                 "collection_failed", dispatch.challenge_id,

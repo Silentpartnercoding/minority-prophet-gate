@@ -12,6 +12,10 @@
 - Add separately authorized dispatch, requirement/result validation, bounded
   collection, crash-safe fail-closed retries, and an optional fsynced JSONL
   hash-chain audit that excludes raw evidence.
+- Add an authenticated transactional SQLite ledger for audit events, derived
+  dispatch state, evidence artifacts, and pending human-review handoffs.
+- Add concrete loopback HTTP epistemic, durable human-queue, and fixed-command
+  program adapters without granting protected-action authority.
 
 ## 0.1.1 — 2026-08-07
 
