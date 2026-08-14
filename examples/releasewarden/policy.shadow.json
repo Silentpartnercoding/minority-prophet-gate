@@ -1,7 +1,7 @@
 {
   "policy_id": "releasewarden-production-v1",
   "mode": "shadow",
-  "environments": ["production"],
+  "environments": ["production", "releasewarden-sandbox"],
   "minimum_independent_roots": 2,
   "required_evidence": [
     {

@@ -154,6 +154,21 @@ SQLite journal. After the policy and domains are independently reviewed, switch
 the copied policy to `enforce` only in the disposable sandbox and repeat the
 failure cases.
 
+### Zero-host dogfood workflow
+
+This repository also includes `releasewarden-dogfood.yml` for the first,
+non-blocking dogfood stage. Run it manually on an exact commit after the normal
+CI and Semgrep checks start. It reads those live check runs with a read-only
+`GITHUB_TOKEN`, waits for the bounded evidence set, evaluates the real
+ReleaseWarden shadow policy, and writes a harmless receipt to the GitHub run
+summary under the `releasewarden-sandbox` environment.
+
+This proves live evidence collection, exact-SHA binding, Gate evaluation, and
+the gated job dependency. It is deliberately **not** described as a custom
+deployment-protection test: it does not exercise the public webhook, App
+installation token, GitHub callback, or enforcement mode. Those remain the
+next hosted test.
+
 ## Handoff to a brother or outside developer
 
 Give them:
