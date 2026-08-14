@@ -1,0 +1,16 @@
+[
+  {
+    "name": "test-suite",
+    "status": "completed",
+    "conclusion": "success",
+    "app_slug": "github-actions",
+    "check_run_id": 101
+  },
+  {
+    "name": "security-scan",
+    "status": "completed",
+    "conclusion": "success",
+    "app_slug": "security-app",
+    "check_run_id": 102
+  }
+]

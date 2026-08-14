@@ -1,0 +1,18 @@
+{
+  "policy_id": "releasewarden-production-v1",
+  "mode": "shadow",
+  "environments": ["production"],
+  "minimum_independent_roots": 2,
+  "required_evidence": [
+    {
+      "check_name": "test-suite",
+      "domain": "protected-test-workflow",
+      "accepted_apps": ["github-actions"]
+    },
+    {
+      "check_name": "security-scan",
+      "domain": "independent-security-service",
+      "accepted_apps": ["security-app"]
+    }
+  ]
+}

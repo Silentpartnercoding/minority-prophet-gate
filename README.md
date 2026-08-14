@@ -11,6 +11,31 @@
 > enforcement requires a real verifier, authorized adapters, durable state,
 > protected runtime paths, and independent review.
 
+## Focused product pathway: ReleaseWarden
+
+**ReleaseWarden** is the first narrow commercial adapter: evidence-backed
+production deployment approval for GitHub Actions. GitHub calls the App before
+a protected environment deploys; ReleaseWarden authenticates the webhook,
+collects check runs for the exact commit, applies deterministic requirements,
+groups evidence by explicitly configured independence domain, and returns a
+Gate decision.
+
+The default `shadow` mode records what ReleaseWarden would decide while sending
+GitHub a non-blocking approval. `enforce` mode sends the actual approval or
+rejection. Neither mode treats repeated checks from one configured control
+domain as multiple independent roots. Start with the offline, zero-effect test:
+
+```bash
+python3 -m minority_prophet.release_warden simulate \
+  --policy examples/releasewarden/policy.shadow.json \
+  --payload examples/releasewarden/deployment-request.json \
+  --checks examples/releasewarden/checks.pass.json
+```
+
+See [`RELEASEWARDEN.md`](RELEASEWARDEN.md) for GitHub App registration, the
+one-repository test, handoff instructions, known limitations, and the exact
+point where a private-repository test requires GitHub Enterprise.
+
 ## Attack it or shadow your workflow
 
 **What you are testing:** whether the same MP Gate logic remains fail-closed
