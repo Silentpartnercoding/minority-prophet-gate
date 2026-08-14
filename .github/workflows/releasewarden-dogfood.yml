@@ -2,6 +2,12 @@ name: releasewarden-dogfood
 
 on:
   workflow_dispatch:
+  push:
+    branches: [agent/evidence-control-plane-preview]
+    paths:
+      - .github/workflows/releasewarden-dogfood.yml
+      - examples/releasewarden/policy.shadow.json
+      - RELEASEWARDEN.md
 
 permissions:
   actions: read
