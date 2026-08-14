@@ -19,6 +19,14 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from .adapter_acp import AttestationVerifier
+from .autonomy import (
+    AutonomyController,
+    AutonomyLevel,
+    AutonomyMandate,
+    AutonomyOutcome,
+    EmergencyNotifier,
+    resolve_gate_release,
+)
 from .evidence_audit import EvidenceRoutingError
 from .evidence_request import EvidenceRequest, EvidenceRequestPolicy
 from .evidence_router import EvidenceCollectionResult, EvidenceRouter
@@ -113,10 +121,11 @@ class EvidenceControlPolicy:
 class EvidenceControlOutcome:
     action: RuntimeAction
     decision: SelectiveDecision
-    receipt: RuntimeReceipt
+    receipt: RuntimeReceipt | None
     collection_rounds: int
     collected_results: tuple[EvidenceCollectionResult, ...]
     transitions: tuple[str, ...]
+    autonomy: AutonomyOutcome | None = None
 
 
 class EvidenceControlPlane:
@@ -127,6 +136,7 @@ class EvidenceControlPlane:
         self.router = router
         self.verifier_bridge = verifier_bridge
         self.runtime_controller = runtime_controller or RuntimeController()
+        self.autonomy_controller = AutonomyController(self.runtime_controller)
         self._outcomes: dict[str, tuple[tuple, EvidenceControlOutcome]] = {}
 
     @staticmethod
@@ -153,6 +163,9 @@ class EvidenceControlPlane:
         if decision.action not in {"proceed", "block", "escalate"}:
             raise EvidenceRoutingError("only a final Gate outcome may reach the runtime")
         assessment = decision.assessment
+        diagnostics = dict(assessment.diagnostics) if assessment else {}
+        diagnostics.update(decision.diagnostics)
+        diagnostics.update(route=decision.route, reason=decision.reason)
         return GateDecision(
             decision.action,
             assessment.verdict if assessment else None,
@@ -160,12 +173,15 @@ class EvidenceControlPlane:
             assessment.confidence if assessment else 0.0,
             assessment.roots_for if assessment else 0,
             assessment.roots_against if assessment else 0,
-            dict(decision.diagnostics, route=decision.route, reason=decision.reason),
+            diagnostics,
             assessment.conversions_to_reverse if assessment else None,
         )
 
     def run(self, action: RuntimeAction, policy: EvidenceControlPolicy,
-            initial_evidence: VerifiedEvidenceBatch, runtime: RuntimeAdapter
+            initial_evidence: VerifiedEvidenceBatch, runtime: RuntimeAdapter, *,
+            autonomy_mandate: AutonomyMandate | None = None,
+            requested_autonomy: AutonomyLevel | str | None = None,
+            emergency_notifier: EmergencyNotifier | None = None,
             ) -> EvidenceControlOutcome:
         """Evaluate, collect, re-evaluate, then execute or prevent exactly once."""
         if not isinstance(action, RuntimeAction):
@@ -174,7 +190,11 @@ class EvidenceControlPlane:
             raise TypeError("policy must be EvidenceControlPolicy")
         if not isinstance(initial_evidence, VerifiedEvidenceBatch):
             raise TypeError("initial_evidence must be VerifiedEvidenceBatch")
-        request_fingerprint = self._request_fingerprint(action, policy)
+        request_fingerprint = self._request_fingerprint(action, policy) + (
+            autonomy_mandate.digest if autonomy_mandate else None,
+            AutonomyLevel.parse(requested_autonomy).label
+            if requested_autonomy is not None else None,
+        )
         existing = self._outcomes.get(action.idempotency_key)
         if existing is not None:
             fingerprint, outcome = existing
@@ -238,13 +258,31 @@ class EvidenceControlPlane:
                 break
             prior_request = request
 
-        receipt = self.runtime_controller.apply(
-            self._runtime_decision(decision), action, runtime
-        )
-        transitions.append("effect_executed" if decision.action == "proceed"
-                           else "effect_prevented")
+        runtime_decision = self._runtime_decision(decision)
+        autonomy = None
+        if autonomy_mandate is None:
+            if requested_autonomy is not None or emergency_notifier is not None:
+                raise EvidenceRoutingError(
+                    "autonomy level or notifier supplied without an autonomy mandate"
+                )
+            receipt = self.runtime_controller.apply(runtime_decision, action, runtime)
+            transitions.append("effect_executed" if decision.action == "proceed"
+                               else "effect_prevented")
+        else:
+            level = (autonomy_mandate.max_level if requested_autonomy is None
+                     else AutonomyLevel.parse(requested_autonomy))
+            release = resolve_gate_release(
+                runtime_decision, action, autonomy_mandate, level,
+            )
+            autonomy = self.autonomy_controller.apply(
+                release, runtime_decision, action, runtime, autonomy_mandate,
+                emergency_notifier,
+            )
+            receipt = autonomy.receipt
+            transitions.append(f"autonomy_{autonomy.status}")
         outcome = EvidenceControlOutcome(
-            action, decision, receipt, rounds, tuple(results), tuple(transitions)
+            action, decision, receipt, rounds, tuple(results), tuple(transitions),
+            autonomy,
         )
         self._outcomes[action.idempotency_key] = (request_fingerprint, outcome)
         return outcome

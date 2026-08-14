@@ -13,6 +13,15 @@ from .adapter_acp import (
     envelopes_to_claims,
 )
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
+from .autonomy import (
+    AutonomyController,
+    AutonomyLevel,
+    AutonomyMandate,
+    AutonomyOutcome,
+    EmergencyNotifier,
+    GateRelease,
+    resolve_gate_release,
+)
 from .evidence_audit import (
     EvidenceAuditEvent,
     EvidenceAuditLog,
@@ -77,6 +86,10 @@ from .selective_hybrid import DeterministicDecision, SelectiveDecision, selectiv
 __version__ = "0.1.0"
 __all__ = [
     "AttestationVerifier",
+    "AutonomyController",
+    "AutonomyLevel",
+    "AutonomyMandate",
+    "AutonomyOutcome",
     "AuthenticatedSqliteEvidenceLedger",
     "AuthenticatedSqliteCaseStore",
     "CallbackEvidenceCollector",
@@ -109,7 +122,9 @@ __all__ = [
     "EvidenceRouter",
     "EvidenceRoutingError",
     "EvidenceVerifierBridge",
+    "EmergencyNotifier",
     "GateDecision",
+    "GateRelease",
     "HttpEvidenceCollector",
     "HumanQueueCollector",
     "IdempotentHttpRuntime",
@@ -135,6 +150,7 @@ __all__ = [
     "envelopes_to_claims",
     "issue_evidence_request",
     "reconcile",
+    "resolve_gate_release",
     "selective_decide",
     "validate_evidence_return",
     "verify_evidence_request",

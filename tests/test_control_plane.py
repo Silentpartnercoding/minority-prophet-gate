@@ -1,6 +1,8 @@
 import unittest
 
 from minority_prophet import (
+    AutonomyLevel,
+    AutonomyMandate,
     CallbackEvidenceCollector,
     CallbackVerifier,
     CandidateEvidenceBridge,
@@ -109,6 +111,27 @@ def router(assertion="SAFE", *, invalid_binding=False, invalid_signature=False):
 
 
 class ControlPlaneTests(unittest.TestCase):
+    def test_autonomy_profile_caps_a_proceed_at_recommend_without_effect(self):
+        runtime = Runtime()
+        owner = AutonomyMandate(
+            "mandate:demo", SUBJECT, AutonomyLevel.RECOMMEND,
+            ("deploy",), ("staging",), "2099-01-01T00:00:00Z",
+            min_roots_for=1, emergency_allowed=False,
+            require_reversible=False,
+        )
+        outcome = EvidenceControlPlane(
+            router(), CandidateEvidenceBridge(verifier())
+        ).run(
+            action(), policy(), VerifiedEvidenceBatch((), verifier()), runtime,
+            autonomy_mandate=owner, requested_autonomy=AutonomyLevel.ACT,
+        )
+        self.assertEqual(outcome.decision.action, "proceed")
+        self.assertEqual(outcome.autonomy.release.released_level,
+                         AutonomyLevel.RECOMMEND)
+        self.assertEqual(outcome.autonomy.status, "recommended")
+        self.assertIsNone(outcome.receipt)
+        self.assertEqual(runtime.effects, 0)
+
     def test_missing_evidence_is_collected_then_effect_runs_once(self):
         evidence_router = router()
         runtime = Runtime()

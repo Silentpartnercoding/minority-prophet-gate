@@ -453,6 +453,55 @@ Its independence guarantee is only as strong as the trusted issuer's canonical
 assignment of `root_id`; signing two IDs for one underlying source would
 manufacture two roots and is therefore a verifier-boundary failure.
 
+### Gate autonomy profiles
+
+Gate evidence decisions and autonomy are separate axes. Gate still returns
+`proceed`, `block`, `request_evidence`, or `escalate`. Only a final `proceed`
+may be resolved through an authenticated owner mandate into one of five
+increasing autonomy levels:
+
+| Level | Gate release | Runtime effect |
+|---|---|---|
+| `observe` | report the decision | none |
+| `recommend` | recommend the frozen action | none |
+| `prepare` | validate and prepare the exact action | none |
+| `act` | execute inside the mandate | exactly one permitted attempt |
+| `emergency_act` | notify the owner, then execute bounded containment | exactly one permitted attempt |
+
+`AutonomyMandate` binds the decision subject, maximum level, action types,
+targets, expiry, minimum independent roots, minimum attack price, optional
+exact action digests, reversibility requirement, and emergency permission.
+Requesting a level above the mandate is capped. An expired, weak, unbound, or
+out-of-scope mandate falls back to `observe` and performs no protected effect.
+`block`, `escalate`, and `request_evidence` can never be upgraded into action.
+
+```python
+from minority_prophet import AutonomyLevel, AutonomyMandate
+
+owner_mandate = AutonomyMandate(
+    mandate_id="containment-v1",
+    decision_subject="incident:742",
+    max_level=AutonomyLevel.ACT,
+    allowed_action_types=("isolate",),
+    allowed_targets=("staging-server-7",),
+    expires_at="2026-09-01T00:00:00Z",
+    min_flip_budget=2.0,
+    min_roots_for=2,
+    require_reversible=True,
+)
+
+outcome = plane.run(
+    frozen_runtime_action, policy, initial_evidence, runtime,
+    autonomy_mandate=owner_mandate,
+    requested_autonomy=AutonomyLevel.ACT,
+)
+```
+
+The mandate object is not self-authenticating. Border, Nxtlinq, IAM, or another
+trusted mandate store must authenticate and revoke production mandates before
+they reach this layer. `emergency_act` additionally requires a notifier; if
+notification fails, execution fails closed.
+
 ### Vendor-neutral evidence router
 
 Each `EvidenceRequirement` carries an explicit `CollectorRoute`. Policy—not the
@@ -517,6 +566,7 @@ minority_prophet/evidence_audit.py # append-only hash-chained event log
 minority_prophet/evidence_router.py # neutral collector routing and dispatch
 minority_prophet/case_store.py # durable asynchronous multi-agent case assembly
 minority_prophet/receipt_verifier.py # fail-closed signed-receipt reference verifier
+minority_prophet/autonomy.py # mandate-bound Gate autonomy profiles
 minority_prophet/reconcile.py    # reconcile(): many status sources, one state
 minority_prophet/runtime_adapter.py # neutral prepare/execute-once/prevent boundary
 minority_prophet/runtime_integrations.py # in-process and idempotent HTTP adapters
