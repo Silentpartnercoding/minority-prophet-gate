@@ -119,6 +119,53 @@ independent-root assessment chooses UNSAFE and the runtime executes zero
 effects. This is an illustrative adversarial case, not a population-level
 accuracy benchmark.
 
+### Optional Border Mandate seam
+
+`MandateGate` consumes one provider-neutral Border authority-relation receipt
+before a consequential runtime action. It is useful when Agent A is allowed to
+request one exact action and Agent B independently has permission to execute it;
+A's request does not transfer B's permission.
+
+The caller supplies the trusted Border verifier, the Gate's expected audience,
+the exact `RuntimeAction` about to be released, a separate resource-policy
+decision, and an atomic nonce store. Gate follows this order:
+
+```
+Border re-verifies both live authority paths and the exact action
+  -> existing resource policy must also say proceed
+  -> Gate binds the verified relationship to a runtime-only context
+  -> any result cache is scoped to that relationship and exact action
+  -> Gate consumes the Mandate nonce once
+  -> RuntimeController records intent before effect
+  -> runtime executes once or records zero attempts
+  -> an execution receipt and neutral lineage record are emitted
+```
+
+A receipt cannot choose its own verifier, audience, or policy. A valid Mandate
+is only one required green light: it never overrides another block or
+escalation. A block does not consume the Mandate; consumption occurs only when
+every conjunctive gate is ready to release the effect.
+`InMemoryMandateNonceStore` exists only for tests and local demonstrations.
+Production deployments need durable atomic reservation shared across every
+Gate replica and the existing durable execution ledger. An identical retry may
+return the prior receipt from that execution ledger; it must not execute again
+through a fresh controller. A crash after nonce consumption but before the
+runtime records execution intent can leave a safely consumed Mandate with no
+effect. Production must reconcile that state or coordinate both durable records
+transactionally; this reference seam proves zero-or-one effect, not distributed
+exactly-once delivery.
+
+The seam remains vendor-neutral by design. It does not own agent scheduling,
+runtime lifecycle, identity issuance, resource credentials, or a vendor control
+plane. `AuthorityRuntimeContext` is not a new credential. It carries only the
+already-verified relationship into a provider-blind adapter. Cache entries are
+never accepted as authority: every retry repeats live Border verification and
+the independent resource-policy check before a cached result can be returned.
+The default lineage record marks the authority anchor `verified` and the runtime
+outcome `observed`; it does not mint a new evidence root or claim that an
+unsigned runtime result is cryptographic proof. Production callers can adapt the
+`KnowledgeLedgerSink` protocol to any durable evidence store.
+
 ### Optional memory-evidence socket
 
 Gate does not require a memory system. When an action explicitly depends on a

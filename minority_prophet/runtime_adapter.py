@@ -20,6 +20,7 @@ class RuntimeAction:
     payload_digest: str
     idempotency_key: str
     payload: dict[str, Any] = field(default_factory=dict)
+    authority_context: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in ("action_id", "action_type", "target", "payload_digest", "idempotency_key"):
