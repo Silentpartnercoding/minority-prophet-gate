@@ -32,6 +32,12 @@ from .control_plane import (
     VerifiedEvidenceBatch,
 )
 from .evidence_ledger import AuthenticatedSqliteEvidenceLedger
+from .case_store import AuthenticatedSqliteCaseStore
+from .receipt_verifier import (
+    RECEIPT_SCHEMA,
+    SignedReceiptVerifier,
+    sign_receipt_envelope,
+)
 from .evidence_request import (
     CollectorRoute,
     EvidenceRequest,
@@ -72,6 +78,7 @@ __version__ = "0.1.0"
 __all__ = [
     "AttestationVerifier",
     "AuthenticatedSqliteEvidenceLedger",
+    "AuthenticatedSqliteCaseStore",
     "CallbackEvidenceCollector",
     "CallbackVerifier",
     "CandidateEvidenceBridge",
@@ -112,6 +119,9 @@ __all__ = [
     "RuntimeAdapter",
     "RuntimeBoundaryError",
     "RuntimeController",
+    "RECEIPT_SCHEMA",
+    "SignedReceiptVerifier",
+    "sign_receipt_envelope",
     "RuntimeReceipt",
     "SelectiveDecision",
     "StateVerdict",

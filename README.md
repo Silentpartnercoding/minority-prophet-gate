@@ -411,6 +411,48 @@ The shim does not require a particular model, agent framework, cloud, evidence
 service, or runtime. Integrators implement the small collector, verifier, and
 runtime protocols.
 
+### Signed-receipt reference path
+
+The experimental preview now includes the smallest production-shaped path for
+assembling several agents' work without trusting their declarations:
+
+```text
+tool/API interception -> durable case -> signed receipts -> verifier
+                      -> MP Gate -> in-process or HTTP runtime
+```
+
+`AuthenticatedSqliteCaseStore` groups asynchronous submissions under one
+frozen action and policy, rejects claim-ID rebinding, survives process restart,
+and detects modified or missing stored envelopes. It is an assembly boundary,
+not an authority source: callers decide when a case is ready and only Gate can
+authorize the protected runtime.
+
+`SignedReceiptVerifier` is a fail-closed local reference verifier. It
+authenticates the complete envelope with an operator-managed issuer key and
+binds it to a decision subject, source root, issuer, and control domain. The
+first accepted use of a `root_id` can count as a root. Later uses count only as
+declared derivations from an already accepted member of that family; an
+undeclared reuse is quarantined rather than manufactured into another vote.
+
+Run the harmless end-to-end example:
+
+```bash
+PYTHONPATH=. python3 examples/reference_signed_interception.py
+```
+
+It assembles three agent claims, collapses one repeated source into an echo,
+passes two independent signed roots to Gate, and invokes an allowlisted demo
+tool exactly once. No network service or model key is required.
+
+The reference verifier uses shared-secret HMAC keys so an adopter can exercise
+the complete contract locally. It is not a universal identity system. For
+cross-organization production use, replace it with `CallbackVerifier` backed
+by asymmetric signatures, workload identity, Border, Nxtlinq, or the
+customer's attestation service. The verifier instance is scoped to one case.
+Its independence guarantee is only as strong as the trusted issuer's canonical
+assignment of `root_id`; signing two IDs for one underlying source would
+manufacture two roots and is therefore a verifier-boundary failure.
+
 ### Vendor-neutral evidence router
 
 Each `EvidenceRequirement` carries an explicit `CollectorRoute`. Policy—not the
@@ -473,6 +515,8 @@ minority_prophet/gate.py         # decide(): proceed / block / escalate + flip_b
 minority_prophet/evidence_request.py # bounded request-evidence challenge contract
 minority_prophet/evidence_audit.py # append-only hash-chained event log
 minority_prophet/evidence_router.py # neutral collector routing and dispatch
+minority_prophet/case_store.py # durable asynchronous multi-agent case assembly
+minority_prophet/receipt_verifier.py # fail-closed signed-receipt reference verifier
 minority_prophet/reconcile.py    # reconcile(): many status sources, one state
 minority_prophet/runtime_adapter.py # neutral prepare/execute-once/prevent boundary
 minority_prophet/runtime_integrations.py # in-process and idempotent HTTP adapters
