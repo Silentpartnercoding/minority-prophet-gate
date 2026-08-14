@@ -5,14 +5,29 @@
   "minimum_independent_roots": 2,
   "required_evidence": [
     {
-      "check_name": "test-suite",
+      "check_name": "test (3.10)",
       "domain": "protected-test-workflow",
       "accepted_apps": ["github-actions"]
     },
     {
-      "check_name": "security-scan",
+      "check_name": "test (3.11)",
+      "domain": "protected-test-workflow",
+      "accepted_apps": ["github-actions"]
+    },
+    {
+      "check_name": "test (3.12)",
+      "domain": "protected-test-workflow",
+      "accepted_apps": ["github-actions"]
+    },
+    {
+      "check_name": "package",
+      "domain": "protected-test-workflow",
+      "accepted_apps": ["github-actions"]
+    },
+    {
+      "check_name": "semgrep-cloud-platform/scan",
       "domain": "independent-security-service",
-      "accepted_apps": ["security-app"]
+      "accepted_apps": ["semgrep-code-silentpartnercoding"]
     }
   ]
 }

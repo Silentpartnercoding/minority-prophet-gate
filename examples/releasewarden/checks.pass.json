@@ -1,16 +1,37 @@
 [
   {
-    "name": "test-suite",
+    "name": "test (3.10)",
     "status": "completed",
     "conclusion": "success",
     "app_slug": "github-actions",
     "check_run_id": 101
   },
   {
-    "name": "security-scan",
+    "name": "test (3.11)",
     "status": "completed",
     "conclusion": "success",
-    "app_slug": "security-app",
+    "app_slug": "github-actions",
     "check_run_id": 102
+  },
+  {
+    "name": "test (3.12)",
+    "status": "completed",
+    "conclusion": "success",
+    "app_slug": "github-actions",
+    "check_run_id": 103
+  },
+  {
+    "name": "package",
+    "status": "completed",
+    "conclusion": "success",
+    "app_slug": "github-actions",
+    "check_run_id": 104
+  },
+  {
+    "name": "semgrep-cloud-platform/scan",
+    "status": "completed",
+    "conclusion": "success",
+    "app_slug": "semgrep-code-silentpartnercoding",
+    "check_run_id": 105
   }
 ]

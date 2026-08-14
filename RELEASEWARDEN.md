@@ -94,8 +94,9 @@ secret-management system.
 ## 4. Configure the release policy
 
 Copy `examples/releasewarden/policy.shadow.json`. Keep `mode` as `shadow` for
-the first live run. Match `check_name` and `accepted_apps` to the check runs in
-the sandbox repository.
+the first live run. The checked-in sample is wired to this repository's GitHub
+Actions matrix and independently installed Semgrep App. For another repository,
+match `check_name` and `accepted_apps` to its observed check runs.
 
 An independence domain is not a label for a check. It means one failure/control
 boundary. If both checks can be changed by the same unprotected workflow, they
