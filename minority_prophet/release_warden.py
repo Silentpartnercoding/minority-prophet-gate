@@ -363,7 +363,11 @@ class GitHubApiTransport:
             request.callback_url,
             token,
             method="POST",
-            body=json.dumps({"state": state, "comment": comment[:1024]}).encode(),
+            body=json.dumps({
+                "environment_name": request.environment,
+                "state": state,
+                "comment": comment[:1024],
+            }).encode(),
         )
 
 
@@ -588,11 +592,14 @@ class ReleaseWardenService:
         self.webhook_secret = webhook_secret
 
     def handle(self, body: bytes, headers: Mapping[str, str]) -> tuple[int, dict[str, Any]]:
-        signature = headers.get("X-Hub-Signature-256") or headers.get("x-hub-signature-256")
+        # HTTP field names are case-insensitive. ``BaseHTTPRequestHandler`` may
+        # expose GitHub's headers as ``X-Github-*`` rather than ``X-GitHub-*``.
+        normalized_headers = {key.lower(): value for key, value in headers.items()}
+        signature = normalized_headers.get("x-hub-signature-256")
         if not verify_webhook_signature(self.webhook_secret, body, signature):
             return 401, {"error": "invalid webhook signature"}
-        event = headers.get("X-GitHub-Event") or headers.get("x-github-event")
-        delivery = headers.get("X-GitHub-Delivery") or headers.get("x-github-delivery")
+        event = normalized_headers.get("x-github-event")
+        delivery = normalized_headers.get("x-github-delivery")
         if event != "deployment_protection_rule" or not delivery:
             return 400, {"error": "unsupported or unidentified GitHub event"}
         digest = "sha256:" + hashlib.sha256(body).hexdigest()

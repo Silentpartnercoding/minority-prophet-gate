@@ -4,15 +4,18 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from minority_prophet.release_warden import (
     CheckObservation,
     DeliveryStore,
     DeploymentRequest,
     EvidenceRequirement,
+    GitHubApiTransport,
     ReleasePolicy,
     ReleaseWardenError,
     ReleaseWardenService,
+    StaticTokenProvider,
     evaluate_release,
     parse_deployment_request,
     verify_webhook_signature,
@@ -80,6 +83,17 @@ class Transport:
 
 
 class ReleaseWardenTests(unittest.TestCase):
+    def test_github_review_includes_required_environment_name(self):
+        transport = GitHubApiTransport(StaticTokenProvider("test-token"))
+        with patch("minority_prophet.release_warden._http_json", return_value={}) as call:
+            transport.review(request(), "approved", "evidence passed")
+        sent = json.loads(call.call_args.kwargs["body"])
+        self.assertEqual(sent, {
+            "environment_name": "production",
+            "state": "approved",
+            "comment": "evidence passed",
+        })
+
     def test_two_independent_successful_domains_approve(self):
         result = evaluate_release(request(), policy(), checks())
         self.assertEqual(result.state, "approved")
@@ -147,9 +161,11 @@ class ReleaseWardenTests(unittest.TestCase):
 
     def test_shadow_service_records_hypothesis_but_releases_github(self):
         body = json.dumps(payload(), sort_keys=True).encode()
+        # This matches the title-casing produced by BaseHTTPRequestHandler in
+        # the real GitHub App webhook path.
         headers = {
-            "X-GitHub-Event": "deployment_protection_rule",
-            "X-GitHub-Delivery": "delivery-shadow",
+            "X-Github-Event": "deployment_protection_rule",
+            "X-Github-Delivery": "delivery-shadow",
             "X-Hub-Signature-256": "sha256=" + hmac.new(
                 b"secret", body, hashlib.sha256
             ).hexdigest(),
