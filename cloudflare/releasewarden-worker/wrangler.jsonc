@@ -12,7 +12,7 @@
     {
       "binding": "DB",
       "database_name": "releasewarden-experimental",
-      "database_id": "REPLACE_AFTER_D1_CREATE",
+      "database_id": "dbfbb71b-0535-40bb-b004-1a6a0c850976",
       "migrations_dir": "migrations"
     }
   ]
