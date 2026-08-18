@@ -6,8 +6,22 @@ side-preserving AND root-preserving lineage corruption, and the margin flip
 condition. FORMAL.md gives the pointers; the normative hypotheses are the theorem
 ledger in the research repository, not this docstring.
 """
-from .adapter_acp import AttestationVerifier, TrustAllVerifier, envelopes_to_claims
+from .adapter_acp import (
+    AttestationVerifier,
+    CallbackVerifier,
+    TrustAllVerifier,
+    envelopes_to_claims,
+)
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
+from .autonomy import (
+    AutonomyController,
+    AutonomyLevel,
+    AutonomyMandate,
+    AutonomyOutcome,
+    EmergencyNotifier,
+    GateRelease,
+    resolve_gate_release,
+)
 from .evidence_audit import (
     EvidenceAuditEvent,
     EvidenceAuditLog,
@@ -18,7 +32,21 @@ from .evidence_collectors import (
     HttpEvidenceCollector,
     HumanQueueCollector,
 )
+from .control_plane import (
+    CandidateEvidenceBridge,
+    EvidenceControlOutcome,
+    EvidenceControlPlane,
+    EvidenceControlPolicy,
+    EvidenceVerifierBridge,
+    VerifiedEvidenceBatch,
+)
 from .evidence_ledger import AuthenticatedSqliteEvidenceLedger
+from .case_store import AuthenticatedSqliteCaseStore
+from .receipt_verifier import (
+    RECEIPT_SCHEMA,
+    SignedReceiptVerifier,
+    sign_receipt_envelope,
+)
 from .evidence_request import (
     CollectorRoute,
     EvidenceRequest,
@@ -58,8 +86,15 @@ from .selective_hybrid import DeterministicDecision, SelectiveDecision, selectiv
 __version__ = "0.1.0"
 __all__ = [
     "AttestationVerifier",
+    "AutonomyController",
+    "AutonomyLevel",
+    "AutonomyMandate",
+    "AutonomyOutcome",
     "AuthenticatedSqliteEvidenceLedger",
+    "AuthenticatedSqliteCaseStore",
     "CallbackEvidenceCollector",
+    "CallbackVerifier",
+    "CandidateEvidenceBridge",
     "Claim",
     "CollectedEvidence",
     "CollectionAuthorization",
@@ -68,6 +103,9 @@ __all__ = [
     "CollectorRoute",
     "ConstrainedSubprocessCollector",
     "DeterministicDecision",
+    "EvidenceControlOutcome",
+    "EvidenceControlPlane",
+    "EvidenceControlPolicy",
     "EvidenceArtifactStore",
     "EvidenceAssessment",
     "EvidenceAuditEvent",
@@ -83,7 +121,10 @@ __all__ = [
     "EvidenceRequirement",
     "EvidenceRouter",
     "EvidenceRoutingError",
+    "EvidenceVerifierBridge",
+    "EmergencyNotifier",
     "GateDecision",
+    "GateRelease",
     "HttpEvidenceCollector",
     "HumanQueueCollector",
     "IdempotentHttpRuntime",
@@ -93,11 +134,15 @@ __all__ = [
     "RuntimeAdapter",
     "RuntimeBoundaryError",
     "RuntimeController",
+    "RECEIPT_SCHEMA",
+    "SignedReceiptVerifier",
+    "sign_receipt_envelope",
     "RuntimeReceipt",
     "SelectiveDecision",
     "StateVerdict",
     "TrustAllVerifier",
     "Verdict",
+    "VerifiedEvidenceBatch",
     "aggregate",
     "assess",
     "assess_memory_evidence",
@@ -105,6 +150,7 @@ __all__ = [
     "envelopes_to_claims",
     "issue_evidence_request",
     "reconcile",
+    "resolve_gate_release",
     "selective_decide",
     "validate_evidence_return",
     "verify_evidence_request",

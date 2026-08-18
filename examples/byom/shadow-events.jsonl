@@ -1,0 +1,2 @@
+{"event_id":"deploy-101","decision_subject":"deploy:101","actual_outcome":"executed","evidence":[{"claim_id":"copied-approval","agent":"agent-a","assertion":"SAFE","mp_test_verdict":"derived","attest":{"derived_from":"missing-source","subject":"deploy:101"}}]}
+{"event_id":"deploy-102","decision_subject":"deploy:102","actual_outcome":"prevented","evidence":[{"claim_id":"test-a","agent":"ci-a","assertion":"UNSAFE","mp_test_verdict":"root","attest":{"origin":"test-a","subject":"deploy:102"}}]}

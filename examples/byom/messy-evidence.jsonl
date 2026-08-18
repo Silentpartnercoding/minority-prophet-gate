@@ -1,0 +1,6 @@
+{"claim_id":"original-scan","agent":"scanner","assertion":"SAFE","mp_test_verdict":"root","attest":{"origin":"scan-1","subject":"deployment:bring-your-own-mess"}}
+{"claim_id":"copy-1","agent":"agent-a","assertion":"SAFE","mp_test_verdict":"derived","attest":{"derived_from":"original-scan","subject":"deployment:bring-your-own-mess"}}
+{"claim_id":"copy-2","agent":"agent-b","assertion":"SAFE","mp_test_verdict":"derived","attest":{"derived_from":"copy-1","subject":"deployment:bring-your-own-mess"}}
+{"claim_id":"forgery","agent":"unknown","assertion":"SAFE","mp_test_verdict":"invalid","attest":{"origin":"made-up","subject":"deployment:bring-your-own-mess"}}
+{"claim_id":"independent-test-a","agent":"ci-a","assertion":"UNSAFE","mp_test_verdict":"root","attest":{"origin":"test-a","subject":"deployment:bring-your-own-mess"}}
+{"claim_id":"independent-test-b","agent":"ci-b","assertion":"UNSAFE","mp_test_verdict":"root","attest":{"origin":"test-b","subject":"deployment:bring-your-own-mess"}}

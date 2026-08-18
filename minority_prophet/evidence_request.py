@@ -46,7 +46,8 @@ def _unique_text(values: Iterable[str], name: str) -> tuple[str, ...]:
 def _digest(payload: dict) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"),
                          ensure_ascii=True).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    # This is a digest helper, not an HTTP/Flask response.
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()  # nosemgrep: directly-returned-format-string
 
 
 @dataclass(frozen=True)

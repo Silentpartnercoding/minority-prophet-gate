@@ -10,6 +10,14 @@ keywords = ["multi-agent", "consensus", "provenance", "attestation", "guardrail"
 
 [project.urls]
 Research = "https://github.com/Silentpartnercoding/minority-prophet"
+Feedback = "https://github.com/Silentpartnercoding/minority-prophet-gate/issues"
+
+[project.scripts]
+mp-gate = "minority_prophet.byom_cli:main"
+releasewarden = "minority_prophet.release_warden:main"
+
+[project.optional-dependencies]
+releasewarden = ["PyJWT[crypto]>=2.8,<3"]
 
 [build-system]
 requires = ["setuptools>=68"]

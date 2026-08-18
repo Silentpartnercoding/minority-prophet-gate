@@ -1,5 +1,66 @@
 # Minority Prophet Gate
 
+> **An evidence-control plane for consequential agent actions.** It lets clear
+> policy decisions move quickly, demands verifiable evidence when uncertainty
+> matters, counts independent evidence rather than repeated AI opinions, and
+> prevents unsupported actions from reaching a runtime. It is vendor-neutral
+> and can be embedded without replacing an existing model or agent framework.
+
+> **Experimental preview:** ready for simulation, adversarial evaluation, and
+> shadow observation. It is not a production-security release. Production
+> enforcement requires a real verifier, authorized adapters, durable state,
+> protected runtime paths, and independent review.
+
+## Focused product pathway: ReleaseWarden
+
+**ReleaseWarden** is the first narrow commercial adapter: evidence-backed
+production deployment approval for GitHub Actions. GitHub calls the App before
+a protected environment deploys; ReleaseWarden authenticates the webhook,
+collects check runs for the exact commit, applies deterministic requirements,
+groups evidence by explicitly configured independence domain, and returns a
+Gate decision.
+
+The default `shadow` mode records what ReleaseWarden would decide while sending
+GitHub a non-blocking approval. `enforce` mode sends the actual approval or
+rejection. Neither mode treats repeated checks from one configured control
+domain as multiple independent roots. Start with the offline, zero-effect test:
+
+```bash
+python3 -m minority_prophet.release_warden simulate \
+  --policy examples/releasewarden/policy.shadow.json \
+  --payload examples/releasewarden/deployment-request.json \
+  --checks examples/releasewarden/checks.pass.json
+```
+
+See [`RELEASEWARDEN.md`](RELEASEWARDEN.md) for GitHub App registration, the
+one-repository test, handoff instructions, known limitations, and the exact
+point where a private-repository test requires GitHub Enterprise.
+
+## Attack it or shadow your workflow
+
+**What you are testing:** whether the same MP Gate logic remains fail-closed
+when evidence is copied, contradictory, malformed, weak, or bound to the wrong
+action—and whether its shadow decisions reveal useful differences from your
+existing workflow. You are not testing signature security: the laboratory
+verifier is deliberately simulated and clearly labeled.
+
+People and coding agents can attack the engine with their own JSON or JSONL—no
+API key or real runtime required:
+
+```bash
+python -m minority_prophet.byom_cli attack \
+  --evidence examples/byom/messy-evidence.jsonl \
+  --policy examples/byom/policy.json \
+  --feedback byom-feedback.json
+```
+
+Attack and shadow commands are simulation-only and always perform zero runtime
+effects. Shadow mode consumes copies of workflow events and reports agreements
+and disagreements without joining the execution path. Read
+[`AGENT-QUICKSTART.md`](AGENT-QUICKSTART.md) for the agent handoff contract,
+input formats, adversarial mission, shadow adapter, privacy-safe feedback, and
+the explicit path from evaluation to an installed enforcement integration.
+
 **Refuse manufactured consensus.** A drop-in gate for multi-agent systems that
 counts *independent, attested evidence roots* instead of voices — so seven
 agents repeating one unverified guess can never outvote two agents who
@@ -323,6 +384,149 @@ effects. Keep issued challenges in a trusted durable ledger: the bundled hash
 identifies and binds request contents but is not a signature and cannot
 authenticate state supplied solely by an untrusted agent.
 
+### Drop-in evidence-control plane
+
+`EvidenceControlPlane` closes the orchestration gap for an embedded install. It
+sits in front of one consequential runtime boundary and runs this bounded loop:
+
+```text
+frozen action
+  -> deterministic policy + Minority Prophet Gate
+  -> proceed / block / escalate -----------------------> runtime adapter
+  -> request_evidence -> authorized collectors -> verifier -> Gate again
+```
+
+Only a final Gate outcome reaches `RuntimeController`. A collection request,
+collector permit, returned artifact, or verification artifact cannot execute
+the protected action. Every challenge retains the exact
+`RuntimeAction.binding_digest`, and the controller preserves the existing
+exactly-once runtime boundary.
+
+```python
+from minority_prophet import (
+    CandidateEvidenceBridge, EvidenceControlPlane, EvidenceControlPolicy,
+    RuntimeController, VerifiedEvidenceBatch,
+)
+
+plane = EvidenceControlPlane(
+    evidence_router,
+    CandidateEvidenceBridge(production_attestation_verifier),
+    RuntimeController(),
+)
+outcome = plane.run(
+    frozen_runtime_action,
+    EvidenceControlPolicy(
+        deterministic_policy, evidence_request_policy,
+        decision_subject="deploy:123",
+        requester_control_domain="agent:orchestrator",
+    ),
+    VerifiedEvidenceBatch(initial_envelopes, production_attestation_verifier),
+    customer_runtime_adapter,
+)
+```
+
+`CandidateEvidenceBridge` is the light path: candidate assertions return to
+Gate and are classified by the injected verifier. `TrustAllVerifier` is not a
+deployment verifier. A hardened installation may put Minority Prophet Border
+or another admission service on the evidence-input side. Admitted evidence
+still returns to Gate for the decision; Border never replaces Gate or runtime
+enforcement.
+
+The shim does not require a particular model, agent framework, cloud, evidence
+service, or runtime. Integrators implement the small collector, verifier, and
+runtime protocols.
+
+### Signed-receipt reference path
+
+The experimental preview now includes the smallest production-shaped path for
+assembling several agents' work without trusting their declarations:
+
+```text
+tool/API interception -> durable case -> signed receipts -> verifier
+                      -> MP Gate -> in-process or HTTP runtime
+```
+
+`AuthenticatedSqliteCaseStore` groups asynchronous submissions under one
+frozen action and policy, rejects claim-ID rebinding, survives process restart,
+and detects modified or missing stored envelopes. It is an assembly boundary,
+not an authority source: callers decide when a case is ready and only Gate can
+authorize the protected runtime.
+
+`SignedReceiptVerifier` is a fail-closed local reference verifier. It
+authenticates the complete envelope with an operator-managed issuer key and
+binds it to a decision subject, source root, issuer, and control domain. The
+first accepted use of a `root_id` can count as a root. Later uses count only as
+declared derivations from an already accepted member of that family; an
+undeclared reuse is quarantined rather than manufactured into another vote.
+
+Run the harmless end-to-end example:
+
+```bash
+PYTHONPATH=. python3 examples/reference_signed_interception.py
+```
+
+It assembles three agent claims, collapses one repeated source into an echo,
+passes two independent signed roots to Gate, and invokes an allowlisted demo
+tool exactly once. No network service or model key is required.
+
+The reference verifier uses shared-secret HMAC keys so an adopter can exercise
+the complete contract locally. It is not a universal identity system. For
+cross-organization production use, replace it with `CallbackVerifier` backed
+by asymmetric signatures, workload identity, Border, Nxtlinq, or the
+customer's attestation service. The verifier instance is scoped to one case.
+Its independence guarantee is only as strong as the trusted issuer's canonical
+assignment of `root_id`; signing two IDs for one underlying source would
+manufacture two roots and is therefore a verifier-boundary failure.
+
+### Gate autonomy profiles
+
+Gate evidence decisions and autonomy are separate axes. Gate still returns
+`proceed`, `block`, `request_evidence`, or `escalate`. Only a final `proceed`
+may be resolved through an authenticated owner mandate into one of five
+increasing autonomy levels:
+
+| Level | Gate release | Runtime effect |
+|---|---|---|
+| `observe` | report the decision | none |
+| `recommend` | recommend the frozen action | none |
+| `prepare` | validate and prepare the exact action | none |
+| `act` | execute inside the mandate | exactly one permitted attempt |
+| `emergency_act` | notify the owner, then execute bounded containment | exactly one permitted attempt |
+
+`AutonomyMandate` binds the decision subject, maximum level, action types,
+targets, expiry, minimum independent roots, minimum attack price, optional
+exact action digests, reversibility requirement, and emergency permission.
+Requesting a level above the mandate is capped. An expired, weak, unbound, or
+out-of-scope mandate falls back to `observe` and performs no protected effect.
+`block`, `escalate`, and `request_evidence` can never be upgraded into action.
+
+```python
+from minority_prophet import AutonomyLevel, AutonomyMandate
+
+owner_mandate = AutonomyMandate(
+    mandate_id="containment-v1",
+    decision_subject="incident:742",
+    max_level=AutonomyLevel.ACT,
+    allowed_action_types=("isolate",),
+    allowed_targets=("staging-server-7",),
+    expires_at="2026-09-01T00:00:00Z",
+    min_flip_budget=2.0,
+    min_roots_for=2,
+    require_reversible=True,
+)
+
+outcome = plane.run(
+    frozen_runtime_action, policy, initial_evidence, runtime,
+    autonomy_mandate=owner_mandate,
+    requested_autonomy=AutonomyLevel.ACT,
+)
+```
+
+The mandate object is not self-authenticating. Border, Nxtlinq, IAM, or another
+trusted mandate store must authenticate and revoke production mandates before
+they reach this layer. `emergency_act` additionally requires a notifier; if
+notification fails, execution fails closed.
+
 ### Vendor-neutral evidence router
 
 Each `EvidenceRequirement` carries an explicit `CollectorRoute`. Policy—not the
@@ -385,6 +589,9 @@ minority_prophet/gate.py         # decide(): proceed / block / escalate + flip_b
 minority_prophet/evidence_request.py # bounded request-evidence challenge contract
 minority_prophet/evidence_audit.py # append-only hash-chained event log
 minority_prophet/evidence_router.py # neutral collector routing and dispatch
+minority_prophet/case_store.py # durable asynchronous multi-agent case assembly
+minority_prophet/receipt_verifier.py # fail-closed signed-receipt reference verifier
+minority_prophet/autonomy.py # mandate-bound Gate autonomy profiles
 minority_prophet/reconcile.py    # reconcile(): many status sources, one state
 minority_prophet/runtime_adapter.py # neutral prepare/execute-once/prevent boundary
 minority_prophet/runtime_integrations.py # in-process and idempotent HTTP adapters
