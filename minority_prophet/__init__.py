@@ -12,6 +12,12 @@ from .adapter_acp import (
     TrustAllVerifier,
     envelopes_to_claims,
 )
+from .authority_continuity import (
+    ContinuityGateError,
+    InMemoryNonceStore,
+    NonceStore,
+    authorize_continuous_effect,
+)
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
 from .autonomy import (
     AutonomyController,
@@ -86,6 +92,7 @@ from .selective_hybrid import DeterministicDecision, SelectiveDecision, selectiv
 __version__ = "0.1.0"
 __all__ = [
     "AttestationVerifier",
+    "ContinuityGateError",
     "AutonomyController",
     "AutonomyLevel",
     "AutonomyMandate",
@@ -128,8 +135,10 @@ __all__ = [
     "HttpEvidenceCollector",
     "HumanQueueCollector",
     "IdempotentHttpRuntime",
+    "InMemoryNonceStore",
     "InProcessToolRuntime",
     "MemoryEvidenceAssessment",
+    "NonceStore",
     "RuntimeAction",
     "RuntimeAdapter",
     "RuntimeBoundaryError",
@@ -146,6 +155,7 @@ __all__ = [
     "aggregate",
     "assess",
     "assess_memory_evidence",
+    "authorize_continuous_effect",
     "decide",
     "envelopes_to_claims",
     "issue_evidence_request",
