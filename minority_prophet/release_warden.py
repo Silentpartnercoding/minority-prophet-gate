@@ -299,6 +299,9 @@ class GitHubAppAuth:
 
 def _http_json(url: str, token: str, *, method: str = "GET",
                body: bytes | None = None) -> Mapping[str, Any]:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ReleaseWardenError("GitHub API URL must use HTTP or HTTPS")
     request = Request(url, data=body, method=method, headers={
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
