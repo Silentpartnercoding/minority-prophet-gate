@@ -11,3 +11,5 @@ shadow-state.jsonl
 releasewarden.sqlite3
 *.pem
 .env
+node_modules/
+.wrangler/

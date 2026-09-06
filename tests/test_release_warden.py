@@ -16,6 +16,7 @@ from minority_prophet.release_warden import (
     ReleaseWardenError,
     ReleaseWardenService,
     StaticTokenProvider,
+    _http_json,
     evaluate_release,
     parse_deployment_request,
     verify_webhook_signature,
@@ -83,6 +84,10 @@ class Transport:
 
 
 class ReleaseWardenTests(unittest.TestCase):
+    def test_http_transport_rejects_non_http_schemes(self):
+        with self.assertRaisesRegex(ReleaseWardenError, "must use HTTP or HTTPS"):
+            _http_json("file:///etc/passwd", "test-token")
+
     def test_github_review_includes_required_environment_name(self):
         transport = GitHubApiTransport(StaticTokenProvider("test-token"))
         with patch("minority_prophet.release_warden._http_json", return_value={}) as call:

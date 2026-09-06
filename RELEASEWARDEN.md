@@ -193,6 +193,27 @@ Suggested task for their agent:
 > Report the exact commit, inputs, expected outcome, observed outcome, and
 > whether any protected effect occurred.
 
+## Permanent no-cost experimental host
+
+`cloudflare/releasewarden-worker/` contains a shadow-only Cloudflare Worker
+adapter. It replaces the temporary laptop listener and tunnel with a stable
+webhook endpoint, while keeping the Python implementation available for local
+simulation and adversarial work.
+
+The hosted adapter uses only Workers and D1. It does not call an LLM, Workers
+AI, or any paid model API. See its README for the current free-tier boundary,
+deployment commands, required secrets, and GitHub App permissions.
+
+For outside testers, the GitHub App must be made public only after the Worker
+is deployed and its webhook endpoint has passed the sandbox test. Every test
+repository supplies a `.releasewarden.json`; the preview refuses enforcement
+and always releases GitHub after recording its hypothetical decision.
+
+The candidate commit currently supplies its own policy file. That is useful
+for transparent shadow testing but is **not** safe for enforcement because an
+untrusted change could weaken the policy that judges it. A production version
+must pin policy to a protected control-plane revision or external policy store.
+
 ## Missing before a paid production pilot
 
 1. Verify protected workflow provenance and detect policy/workflow changes in

@@ -6,6 +6,8 @@ on:
     branches: [agent/evidence-control-plane-preview]
     paths:
       - .github/workflows/releasewarden-dogfood.yml
+      - .releasewarden.json
+      - cloudflare/releasewarden-worker/**
       - examples/releasewarden/policy.shadow.json
       - RELEASEWARDEN.md
 
