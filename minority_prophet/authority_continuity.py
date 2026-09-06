@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import sqlite3
 from threading import Lock
 from typing import Any, Callable, Protocol
 
@@ -58,6 +59,40 @@ class InMemoryNonceStore:
                 return False
             self._seen[nonce] = binding_digest
             return True
+
+
+class SqliteNonceStore:
+    """Durable, process-safe first-use store for a single deployment."""
+
+    def __init__(self, database: str) -> None:
+        if not database:
+            raise ValueError("database path is required")
+        self.database = database
+        with self._connect() as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS continuity_nonces ("
+                "nonce TEXT PRIMARY KEY, binding_digest TEXT NOT NULL, "
+                "consumed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+            )
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.database, timeout=30)
+        connection.execute("PRAGMA busy_timeout = 30000")
+        return connection
+
+    def consume(self, nonce: str, binding_digest: str) -> bool:
+        if not nonce or not binding_digest:
+            raise ValueError("nonce and binding digest are required")
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                connection.execute(
+                    "INSERT INTO continuity_nonces (nonce, binding_digest) VALUES (?, ?)",
+                    (nonce, binding_digest),
+                )
+            return True
+        except sqlite3.IntegrityError:
+            return False
 
 
 VerifyReceipt = Callable[[dict[str, Any]], bool]

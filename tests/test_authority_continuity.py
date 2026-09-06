@@ -2,10 +2,13 @@ import copy
 from datetime import datetime, timezone
 import hashlib
 import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from minority_prophet.authority_continuity import (
     InMemoryNonceStore,
+    SqliteNonceStore,
     authorize_continuous_effect,
 )
 
@@ -52,6 +55,13 @@ def receipt():
 
 
 class AuthorityContinuityGateTests(unittest.TestCase):
+    def test_sqlite_nonce_store_survives_reopen(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "nonces.sqlite3")
+            self.assertTrue(SqliteNonceStore(database).consume("n" * 16, "sha256:first"))
+            self.assertFalse(SqliteNonceStore(database).consume("n" * 16, "sha256:first"))
+            self.assertFalse(SqliteNonceStore(database).consume("n" * 16, "sha256:other"))
+
     def authorize(self, value=None, effect=None, **overrides):
         kwargs = {
             "expected_audience": "vendor.example",

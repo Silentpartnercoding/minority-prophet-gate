@@ -16,6 +16,7 @@ from .authority_continuity import (
     ContinuityGateError,
     InMemoryNonceStore,
     NonceStore,
+    SqliteNonceStore,
     authorize_continuous_effect,
 )
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
@@ -139,6 +140,7 @@ __all__ = [
     "InProcessToolRuntime",
     "MemoryEvidenceAssessment",
     "NonceStore",
+    "SqliteNonceStore",
     "RuntimeAction",
     "RuntimeAdapter",
     "RuntimeBoundaryError",
