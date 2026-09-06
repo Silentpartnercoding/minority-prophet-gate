@@ -99,6 +99,13 @@ VerifyReceipt = Callable[[dict[str, Any]], bool]
 IsCurrent = Callable[[str], bool]
 
 
+class GateContinuityTrustProvider(Protocol):
+    """Deployment-owned verification and revocation checks used by Gate."""
+
+    def verify_border_receipt(self, receipt: dict[str, Any]) -> bool: ...
+    def mandate_is_current(self, mandate_id: str) -> bool: ...
+
+
 def authorize_continuous_effect(
     receipt: dict[str, Any],
     candidate_effect: dict[str, Any],
@@ -165,3 +172,17 @@ def authorize_continuous_effect(
         "chain_digest": receipt["chain_digest"],
         "effect_digest": receipt["final_effect_digest"],
     })
+
+
+def authorize_continuous_effect_with_provider(
+    receipt: dict[str, Any], candidate_effect: dict[str, Any], *,
+    expected_audience: str, trust: GateContinuityTrustProvider,
+    nonce_store: NonceStore, now: datetime | None = None,
+) -> GateDecision:
+    """Provider-oriented entry point preserving Gate's fail-closed behavior."""
+    return authorize_continuous_effect(
+        receipt, candidate_effect, expected_audience=expected_audience,
+        verify_border_receipt=trust.verify_border_receipt,
+        mandate_is_current=trust.mandate_is_current,
+        nonce_store=nonce_store, now=now,
+    )

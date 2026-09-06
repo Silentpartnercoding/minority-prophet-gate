@@ -10,6 +10,7 @@ from minority_prophet.authority_continuity import (
     InMemoryNonceStore,
     SqliteNonceStore,
     authorize_continuous_effect,
+    authorize_continuous_effect_with_provider,
 )
 
 
@@ -55,6 +56,10 @@ def receipt():
 
 
 class AuthorityContinuityGateTests(unittest.TestCase):
+    class Trust:
+        def verify_border_receipt(self, _value): return True
+        def mandate_is_current(self, _value): return True
+
     def test_sqlite_nonce_store_survives_reopen(self):
         with tempfile.TemporaryDirectory() as directory:
             database = str(Path(directory) / "nonces.sqlite3")
@@ -119,6 +124,21 @@ class AuthorityContinuityGateTests(unittest.TestCase):
             mandate_is_current=unavailable).action)
         future = receipt(); future["issued_at"] = "2026-09-06T12:01:00Z"
         self.assertEqual("block", self.authorize(value=future).action)
+
+    def test_production_trust_provider_seam_preserves_fail_closed_gate(self):
+        self.assertEqual("proceed", authorize_continuous_effect_with_provider(
+            receipt(), EFFECT, expected_audience="vendor.example",
+            trust=self.Trust(), nonce_store=InMemoryNonceStore(), now=NOW).action)
+
+        class Offline(self.Trust):
+            def mandate_is_current(self, _value):
+                raise ConnectionError("revocation unavailable")
+
+        decision = authorize_continuous_effect_with_provider(
+            receipt(), EFFECT, expected_audience="vendor.example",
+            trust=Offline(), nonce_store=InMemoryNonceStore(), now=NOW)
+        self.assertEqual("block", decision.action)
+        self.assertIn("currency check unavailable", decision.diagnostics["reason"])
 
 
 if __name__ == "__main__":

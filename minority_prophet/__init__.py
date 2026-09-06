@@ -14,10 +14,12 @@ from .adapter_acp import (
 )
 from .authority_continuity import (
     ContinuityGateError,
+    GateContinuityTrustProvider,
     InMemoryNonceStore,
     NonceStore,
     SqliteNonceStore,
     authorize_continuous_effect,
+    authorize_continuous_effect_with_provider,
 )
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
 from .autonomy import (
@@ -95,6 +97,7 @@ __version__ = "0.1.0"
 __all__ = [
     "AttestationVerifier",
     "ContinuityGateError",
+    "GateContinuityTrustProvider",
     "AutonomyController",
     "AutonomyLevel",
     "AutonomyMandate",
@@ -161,6 +164,7 @@ __all__ = [
     "assess",
     "assess_memory_evidence",
     "authorize_continuous_effect",
+    "authorize_continuous_effect_with_provider",
     "decide",
     "envelopes_to_claims",
     "issue_evidence_request",
