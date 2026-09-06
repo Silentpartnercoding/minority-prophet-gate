@@ -98,7 +98,11 @@ class HttpEvidenceCollector:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            # The constructor rejects non-HTTP(S) schemes and requires explicit
+            # opt-in plus TLS for remote hosts, so file:// cannot reach urlopen.
+            with urllib.request.urlopen(  # nosemgrep: dynamic-urllib-use-detected
+                request, timeout=self.timeout_seconds
+            ) as response:
                 raw = response.read(self.max_response_bytes + 1)
         except (OSError, urllib.error.URLError) as exc:
             raise EvidenceRoutingError("evidence service request failed") from exc

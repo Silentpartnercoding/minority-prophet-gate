@@ -8,3 +8,6 @@ venv/
 results/*.jsonl
 results/spool/
 shadow-state.jsonl
+releasewarden.sqlite3
+*.pem
+.env

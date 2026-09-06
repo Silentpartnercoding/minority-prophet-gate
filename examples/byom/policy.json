@@ -1,0 +1,6 @@
+{
+  "decision_subject": "deployment:bring-your-own-mess",
+  "min_flip_budget": 1.0,
+  "proceed_side": 1,
+  "unbound_root_weight": 0.0
+}

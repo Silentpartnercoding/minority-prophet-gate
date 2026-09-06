@@ -1,0 +1,10 @@
+{
+  "action": "requested",
+  "environment": "production",
+  "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "ref": "main",
+  "deployment_callback_url": "https://api.github.com/repos/acme/service/actions/runs/123/deployment_protection_rule",
+  "repository": {"id": 10, "full_name": "acme/service"},
+  "installation": {"id": 20},
+  "workflow_run": {"id": 123}
+}
