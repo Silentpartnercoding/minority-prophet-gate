@@ -120,6 +120,20 @@ rewirings, 100k randomized instances, zero violations), benchmarks against
 Dawid–Skene / truth-discovery baselines, and the research paper draft live in
 the [Minority Prophet research repository](https://github.com/Silentpartnercoding/minority-prophet).
 
+## Mandate / Border continuity Gate
+
+`authorize_continuous_effect` is the narrow authority lane. It consumes a
+Border-stamped `border-intent-continuity/v0.1` receipt, rechecks its signature,
+audience, expiry, and revocation status, atomically consumes its nonce, and
+compares it with the exact candidate effect immediately before the runtime.
+Any mismatch or unavailable verifier/revocation/replay dependency returns a
+fail-closed `block` decision. The bundled in-memory nonce store is test-only;
+production must inject a durable atomic store.
+
+This does not make Gate a translation layer. Mandate defines authority, Border
+proves that authority survived and narrowed across translations, and Gate only
+decides whether the exact final effect may occur now.
+
 ## Quickstart
 
 > `TrustAllVerifier` below is an unsafe testing fixture for the bundled example.
