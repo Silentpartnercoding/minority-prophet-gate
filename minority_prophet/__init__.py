@@ -48,6 +48,7 @@ from .control_plane import (
     VerifiedEvidenceBatch,
 )
 from .evidence_ledger import AuthenticatedSqliteEvidenceLedger
+from .execution_receipt import issue_execution_receipt, verify_execution_receipt
 from .case_store import AuthenticatedSqliteCaseStore
 from .receipt_verifier import (
     RECEIPT_SCHEMA,
@@ -130,6 +131,7 @@ __all__ = [
     "EvidenceRouter",
     "EvidenceRoutingError",
     "EvidenceVerifierBridge",
+    "issue_execution_receipt",
     "EmergencyNotifier",
     "GateDecision",
     "GateRelease",
@@ -154,6 +156,7 @@ __all__ = [
     "TrustAllVerifier",
     "Verdict",
     "VerifiedEvidenceBatch",
+    "verify_execution_receipt",
     "aggregate",
     "assess",
     "assess_memory_evidence",
