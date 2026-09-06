@@ -7,6 +7,12 @@ condition. FORMAL.md gives the pointers; the normative hypotheses are the theore
 ledger in the research repository, not this docstring.
 """
 from .adapter_acp import AttestationVerifier, TrustAllVerifier, envelopes_to_claims
+from .authority_continuity import (
+    ContinuityGateError,
+    InMemoryNonceStore,
+    NonceStore,
+    authorize_continuous_effect,
+)
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
 from .evidence_audit import (
     EvidenceAuditEvent,
@@ -58,6 +64,7 @@ from .selective_hybrid import DeterministicDecision, SelectiveDecision, selectiv
 __version__ = "0.1.0"
 __all__ = [
     "AttestationVerifier",
+    "ContinuityGateError",
     "AuthenticatedSqliteEvidenceLedger",
     "CallbackEvidenceCollector",
     "Claim",
@@ -87,8 +94,10 @@ __all__ = [
     "HttpEvidenceCollector",
     "HumanQueueCollector",
     "IdempotentHttpRuntime",
+    "InMemoryNonceStore",
     "InProcessToolRuntime",
     "MemoryEvidenceAssessment",
+    "NonceStore",
     "RuntimeAction",
     "RuntimeAdapter",
     "RuntimeBoundaryError",
@@ -101,6 +110,7 @@ __all__ = [
     "aggregate",
     "assess",
     "assess_memory_evidence",
+    "authorize_continuous_effect",
     "decide",
     "envelopes_to_claims",
     "issue_evidence_request",
