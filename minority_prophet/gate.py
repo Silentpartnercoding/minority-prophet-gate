@@ -35,13 +35,13 @@ def assess(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
            abstain_margin: float = 0.0, decision_subject=None,
            unbound_root_weight: float = 0.5,
            freshness: Optional[dict] = DEFAULT_FRESHNESS,
-           unstated_depth_weight: float = 1.0) -> EvidenceAssessment:
+           depth_weights: Optional[dict] = None) -> EvidenceAssessment:
     """Evaluate evidence without deciding what any runtime may do."""
     rep = envelopes_to_claims(envelopes, verifier,
                               decision_subject=decision_subject,
                               unbound_root_weight=unbound_root_weight,
                               freshness=freshness,
-                              unstated_depth_weight=unstated_depth_weight)
+                              depth_weights=depth_weights)
     if not rep.claims:
         return EvidenceAssessment(None, 0.0, 0.5, 0, 0,
                                   {"reason": "no verifiable claims",
@@ -85,7 +85,7 @@ def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
            proceed_side: int = 1, min_flip_budget: float = 1.0,
            abstain_margin: float = 0.0, decision_subject=None,
            unbound_root_weight: float = 0.5, freshness: Optional[dict] = DEFAULT_FRESHNESS,
-           unstated_depth_weight: float = 1.0) -> GateDecision:
+           depth_weights: Optional[dict] = None) -> GateDecision:
     """Aggregate attested envelopes and gate the action.
     - proceed only if the verdict favors `proceed_side` AND the flip budget
       (attack price) meets `min_flip_budget`
@@ -96,7 +96,7 @@ def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
                         decision_subject=decision_subject,
                         unbound_root_weight=unbound_root_weight,
                         freshness=freshness,
-                        unstated_depth_weight=unstated_depth_weight)
+                        depth_weights=depth_weights)
     if assessment.verdict is None:
         return GateDecision("escalate", None, assessment.flip_budget,
                             assessment.confidence, assessment.roots_for,

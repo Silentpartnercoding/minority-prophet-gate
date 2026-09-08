@@ -8,10 +8,11 @@ Envelope shape (fields beyond these are ignored):
   "attest": {
     "origin": "scan-7f2c",        # freshness class only -- see below, NOT root identity
     "witness_depth": "reality",   # optional: how far back toward the world this
-                                  # source reached. One of reality, method,
-                                  # replication, raw, analysis, text. Absent
-                                  # means unstated, which is NOT evidence of
-                                  # observation -- see AttestationVerifier.
+                                  # source reached. A LADDER, closest first:
+                                  # reality, method, replication, raw, analysis,
+                                  # text. Absent means unstated, which is NOT
+                                  # evidence of observation and is weighted no
+                                  # better than the weakest stated rung.
     "derived_from": "c2",         # optional: parent claim id (echo). THIS is what collapses.
     "sig": "attestation:..."      # signature over the entry-stamp payload
   }
@@ -143,6 +144,45 @@ WITNESS_DEPTHS = ("reality", "method", "replication", "raw", "analysis", "text")
 OBSERVING_DEPTHS = frozenset({"reality", "method", "replication"})
 
 
+def normalise_depth_weights(weights: Optional[dict]) -> dict:
+    """Per-rung weights, with `unstated` pinned to the weakest stated rung.
+
+    Depth is a ladder, not a switch. An earlier draft of this change multiplied
+    every non-observing rung by one scalar, which replaced a two-value model
+    (`root` / `derived`) with another two-value model (observing / not) and threw
+    away the gradation that motivated the change. Re-running the raw data is not
+    the same as re-reading the paper, and the weights must be able to say so.
+
+    `unstated` is set to the **minimum** supplied weight rather than to 1.0 or to
+    a value of its own: a source that did not say what it did cannot be better
+    than the weakest thing it might have done. Unknown is never a privilege.
+
+    `None` means no discounting at all -- every rung 1.0 -- which is the default
+    and preserves existing behaviour exactly.
+    """
+    if weights is None:
+        return {key: 1.0 for key in WITNESS_DEPTHS + ("unstated",)}
+    resolved = {}
+    for key in WITNESS_DEPTHS:
+        value = float(weights.get(key, 1.0))
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"depth weight for {key!r} must be between 0 and 1")
+        resolved[key] = value
+    if "unstated" in weights:
+        value = float(weights["unstated"])
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("depth weight for 'unstated' must be between 0 and 1")
+        if value > min(resolved.values()):
+            raise ValueError(
+                "unstated depth cannot outweigh the weakest stated depth: a "
+                "source that did not say what it did cannot be better than the "
+                "weakest thing it might have done")
+        resolved["unstated"] = value
+    else:
+        resolved["unstated"] = min(resolved.values())
+    return resolved
+
+
 def stated_depth(attest: dict) -> Optional[str]:
     """The declared depth, or None when unstated or unrecognised.
 
@@ -213,7 +253,7 @@ def envelopes_to_claims(envelopes: Iterable[dict],
                         *, decision_subject=None,
                         unbound_root_weight: float = 0.5,
                         freshness: Optional[dict] = DEFAULT_FRESHNESS,
-                        unstated_depth_weight: float = 1.0,
+                        depth_weights: Optional[dict] = None,
                         ) -> AdapterReport:
     """Convert verified envelopes while enforcing R2.5 subject/freshness rules.
 
@@ -225,8 +265,7 @@ def envelopes_to_claims(envelopes: Iterable[dict],
     """
     if not 0.0 <= unbound_root_weight <= 1.0:
         raise ValueError("unbound_root_weight must be between 0 and 1")
-    if not 0.0 <= unstated_depth_weight <= 1.0:
-        raise ValueError("unstated_depth_weight must be between 0 and 1")
+    depth_weights = normalise_depth_weights(depth_weights)
     to_bit = assertion_map or _to_bit
     records, quarantine, exclusions = {}, [], {}
     for env in envelopes:
@@ -306,19 +345,12 @@ def envelopes_to_claims(envelopes: Iterable[dict],
             # observation on the strength of a signature, which establishes who
             # is speaking and not whether they looked. Default 1.0 preserves
             # existing behaviour exactly; lowering it is opt-in migration.
-            if record["depth"] is None:
-                weight *= unstated_depth_weight
-                if unstated_depth_weight < 1.0:
-                    exclusions["unstated_depth"] = exclusions.get("unstated_depth", 0) + 1
-            elif record["depth"] not in OBSERVING_DEPTHS:
-                # Stated, and stated as contact with a record rather than the
-                # world. Honest producers land here; they should not be counted
-                # as observers for having been honest, but they are also not
-                # echoes -- they may have no nameable parent.
-                weight *= unstated_depth_weight
-                if unstated_depth_weight < 1.0:
-                    exclusions["non_observing_depth"] = exclusions.get(
-                        "non_observing_depth", 0) + 1
+            key = record["depth"] or "unstated"
+            depth_factor = depth_weights[key]
+            if depth_factor < 1.0:
+                weight *= depth_factor
+                tag = f"depth_{key}"
+                exclusions[tag] = exclusions.get(tag, 0) + 1
             if decision_subject is not None:
                 if record["subject"] == decision_subject:
                     bound_root_ids.add(cid)
