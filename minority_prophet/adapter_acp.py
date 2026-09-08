@@ -7,6 +7,12 @@ Envelope shape (fields beyond these are ignored):
   "assertion": "SAFE" | "UNSAFE" | 1 | 0,
   "attest": {
     "origin": "scan-7f2c",        # freshness class only -- see below, NOT root identity
+    "witness_depth": "reality",   # optional: how far back toward the world this
+                                  # source reached. A LADDER, closest first:
+                                  # reality, method, replication, raw, analysis,
+                                  # text. Absent means unstated, which is NOT
+                                  # evidence of observation and is weighted no
+                                  # better than the weakest stated rung.
     "derived_from": "c2",         # optional: parent claim id (echo). THIS is what collapses.
     "sig": "attestation:..."      # signature over the entry-stamp payload
   }
@@ -47,7 +53,7 @@ SECURITY MODEL (read before deploying):
   combination impossible to produce honestly.
 """
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from math import pow
 from typing import Callable, Iterable, Optional
@@ -76,6 +82,19 @@ class AttestationVerifier:
     "root"    : signature valid and attests a fresh observation
     "derived" : signature valid and attests derivation (or no root claim)
     "invalid" : signature invalid or missing where required -> quarantined
+
+    KNOWN LIMIT of this three-value contract. A signature establishes WHO is
+    speaking. It says nothing about HOW FAR BACK TOWARD THE WORLD they went, and
+    `"root"` is documented above as attesting a fresh observation. Those are
+    different facts, and only one of them is verified.
+
+    "derived" is not an escape either: a derived claim must name its ancestor
+    (`derived_from`) or it is not collapsed. So a source that observed nothing
+    and cannot name a parent -- a re-reader, a summariser, a model reasoning
+    over supplied text -- has no valid encoding, and must be sent as `"root"`.
+
+    The optional `witness_depth` field below closes that gap without changing
+    this contract. Verifiers need not be modified.
     """
     def verify(self, env: dict) -> str:
         raise NotImplementedError
@@ -103,6 +122,90 @@ class AdapterReport:
     bound_root_ids: set
     unbound_root_ids: set
     exclusions: dict
+    depth_profile: dict = field(default_factory=dict)
+    """Counts of roots by stated depth, plus `unstated`.
+
+    Roots counted as fresh observations that never claimed to be one appear
+    under `unstated`. That number is the size of the assumption this package
+    has been making silently."""
+
+
+#: How far back toward the world a source actually reached, ordered
+#: closest-first. Optional in the envelope's `attest` block:
+#:
+#:     "attest": {"witness_depth": "reality", ...}
+#:
+#: A signature cannot establish this, which is why it is stated rather than
+#: verified -- and why an unstated depth is recorded as unstated rather than
+#: assumed. Absence is not evidence of observation.
+WITNESS_DEPTHS = ("reality", "method", "replication", "raw", "analysis", "text")
+
+#: Depths that constitute contact with the world rather than with a record.
+OBSERVING_DEPTHS = frozenset({"reality", "method", "replication"})
+
+
+def normalise_depth_weights(weights: Optional[dict]) -> dict:
+    """Per-rung weights, with `unstated` pinned to the weakest stated rung.
+
+    Depth is a ladder, not a switch. An earlier draft of this change multiplied
+    every non-observing rung by one scalar, which replaced a two-value model
+    (`root` / `derived`) with another two-value model (observing / not) and threw
+    away the gradation that motivated the change. Re-running the raw data is not
+    the same as re-reading the paper, and the weights must be able to say so.
+
+    `unstated` has no honest point value. A source that did not say what it did
+    might have been an eyewitness who omitted the field; nothing about the source
+    changed when the field was left blank, only what we may conclude. Pinning it
+    to the weakest rung is a *policy*, not a fact, and asserting it as a fact is
+    the error this package exists to catch.
+
+    So `unstated` is treated as a **range**: `[weakest, strongest]`. Callers get
+    a bound from each end via `assess()`, and a decision that differs across the
+    range escalates rather than picking an end. The default supplied here is the
+    conservative end, used when a caller asks for a single number anyway.
+
+    Collapsing to the worst case invents a fact exactly as much as collapsing to
+    the best case.
+
+    `None` means no discounting at all -- every rung 1.0 -- which is the default
+    and preserves existing behaviour exactly.
+    """
+    if weights is None:
+        return {key: 1.0 for key in WITNESS_DEPTHS + ("unstated",)}
+    resolved = {}
+    for key in WITNESS_DEPTHS:
+        value = float(weights.get(key, 1.0))
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"depth weight for {key!r} must be between 0 and 1")
+        resolved[key] = value
+    if "unstated" in weights:
+        value = float(weights["unstated"])
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("depth weight for 'unstated' must be between 0 and 1")
+        # No constraint tying this to the weakest stated rung. An earlier
+        # version refused any value above it, on the reasoning that a source
+        # which did not say what it did cannot be better than the weakest thing
+        # it might have done. That is false: an eyewitness who omitted the field
+        # is still an eyewitness, and nothing about the source changed when the
+        # field was left blank. The claim was about what we may conclude, stated
+        # as though it were about them -- and the guard then blocked the very
+        # computation needed to express the honest answer, which is a range.
+        # See `gate.assess_bounds`.
+        resolved["unstated"] = value
+    else:
+        resolved["unstated"] = min(resolved.values())
+    return resolved
+
+
+def stated_depth(attest: dict) -> Optional[str]:
+    """The declared depth, or None when unstated or unrecognised.
+
+    An unrecognised value reads as unstated: a producer sending a word this
+    version does not know has not stated a depth, and silence is the
+    conservative reading.
+    """
+    value = attest.get("witness_depth")
+    return value if value in WITNESS_DEPTHS else None
 
 
 def _age_seconds(attest: dict) -> Optional[float]:
@@ -164,6 +267,7 @@ def envelopes_to_claims(envelopes: Iterable[dict],
                         *, decision_subject=None,
                         unbound_root_weight: float = 0.5,
                         freshness: Optional[dict] = DEFAULT_FRESHNESS,
+                        depth_weights: Optional[dict] = None,
                         ) -> AdapterReport:
     """Convert verified envelopes while enforcing R2.5 subject/freshness rules.
 
@@ -175,6 +279,7 @@ def envelopes_to_claims(envelopes: Iterable[dict],
     """
     if not 0.0 <= unbound_root_weight <= 1.0:
         raise ValueError("unbound_root_weight must be between 0 and 1")
+    depth_weights = normalise_depth_weights(depth_weights)
     to_bit = assertion_map or _to_bit
     records, quarantine, exclusions = {}, [], {}
     for env in envelopes:
@@ -189,7 +294,8 @@ def envelopes_to_claims(envelopes: Iterable[dict],
         at = env.get("attest") or {}
         parent = at.get("derived_from") if status == "derived" else None
         records[cid] = dict(env=env, assertion=bit, attest=at, parent=parent,
-                            status=status, subject=at.get("subject"))
+                            status=status, subject=at.get("subject"),
+                            depth=stated_depth(at))
 
     valid, invalid = set(records), set()
     # A derived claim must carry exactly its ancestor root's subject. Iterate so
@@ -232,6 +338,15 @@ def envelopes_to_claims(envelopes: Iterable[dict],
     for cid in invalid:
         quarantine.append(records[cid]["env"])
 
+    # Depth is counted over roots only. A derived claim's depth is its
+    # ancestor's; asking how deep an echo went is not a meaningful question.
+    depth_profile: dict = {}
+    for cid, record in records.items():
+        if cid in invalid or record["parent"] is not None:
+            continue
+        key = record["depth"] or "unstated"
+        depth_profile[key] = depth_profile.get(key, 0) + 1
+
     claims, bound_root_ids, unbound_root_ids = [], set(), set()
     for cid, record in records.items():
         if cid in invalid:
@@ -240,6 +355,16 @@ def envelopes_to_claims(envelopes: Iterable[dict],
         weight = 1.0
         if parent is None:
             weight = _root_weight(attest, freshness=freshness, exclusions=exclusions)
+            # A root that never stated a depth is being counted as a fresh
+            # observation on the strength of a signature, which establishes who
+            # is speaking and not whether they looked. Default 1.0 preserves
+            # existing behaviour exactly; lowering it is opt-in migration.
+            key = record["depth"] or "unstated"
+            depth_factor = depth_weights[key]
+            if depth_factor < 1.0:
+                weight *= depth_factor
+                tag = f"depth_{key}"
+                exclusions[tag] = exclusions.get(tag, 0) + 1
             if decision_subject is not None:
                 if record["subject"] == decision_subject:
                     bound_root_ids.add(cid)
@@ -264,7 +389,8 @@ def envelopes_to_claims(envelopes: Iterable[dict],
             singletons += 1
         else:
             fixed.append(claim)
-    return AdapterReport(claims=fixed, quarantined=quarantine,
+    return AdapterReport(depth_profile=depth_profile,
+                         claims=fixed, quarantined=quarantine,
                          unattested_singletons=singletons,
                          bound_root_ids=bound_root_ids,
                          unbound_root_ids=unbound_root_ids,
