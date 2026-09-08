@@ -34,18 +34,22 @@ class EvidenceAssessment:
 def assess(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
            abstain_margin: float = 0.0, decision_subject=None,
            unbound_root_weight: float = 0.5,
-           freshness: Optional[dict] = DEFAULT_FRESHNESS) -> EvidenceAssessment:
+           freshness: Optional[dict] = DEFAULT_FRESHNESS,
+           unstated_depth_weight: float = 1.0) -> EvidenceAssessment:
     """Evaluate evidence without deciding what any runtime may do."""
     rep = envelopes_to_claims(envelopes, verifier,
                               decision_subject=decision_subject,
                               unbound_root_weight=unbound_root_weight,
-                              freshness=freshness)
+                              freshness=freshness,
+                              unstated_depth_weight=unstated_depth_weight)
     if not rep.claims:
         return EvidenceAssessment(None, 0.0, 0.5, 0, 0,
                                   {"reason": "no verifiable claims",
                                    "quarantined": len(rep.quarantined)})
     v = aggregate(rep.claims, abstain_margin=abstain_margin, use_weights=True)
     diag = dict(v.diagnostics, quarantined=len(rep.quarantined),
+                depth_profile=rep.depth_profile,
+                roots_assumed_observing=rep.depth_profile.get("unstated", 0),
                 unattested_singletons=rep.unattested_singletons,
                 subject=decision_subject, exclusions=rep.exclusions,
                 bound_roots=len(rep.bound_root_ids),
@@ -80,8 +84,8 @@ def assess(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
 def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
            proceed_side: int = 1, min_flip_budget: float = 1.0,
            abstain_margin: float = 0.0, decision_subject=None,
-           unbound_root_weight: float = 0.5, freshness: Optional[dict] = DEFAULT_FRESHNESS
-           ) -> GateDecision:
+           unbound_root_weight: float = 0.5, freshness: Optional[dict] = DEFAULT_FRESHNESS,
+           unstated_depth_weight: float = 1.0) -> GateDecision:
     """Aggregate attested envelopes and gate the action.
     - proceed only if the verdict favors `proceed_side` AND the flip budget
       (attack price) meets `min_flip_budget`
@@ -91,7 +95,8 @@ def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
     assessment = assess(envelopes, verifier, abstain_margin=abstain_margin,
                         decision_subject=decision_subject,
                         unbound_root_weight=unbound_root_weight,
-                        freshness=freshness)
+                        freshness=freshness,
+                        unstated_depth_weight=unstated_depth_weight)
     if assessment.verdict is None:
         return GateDecision("escalate", None, assessment.flip_budget,
                             assessment.confidence, assessment.roots_for,
