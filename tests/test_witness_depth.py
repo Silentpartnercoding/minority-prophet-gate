@@ -15,7 +15,7 @@ LADDER = {"reality": 1.0, "method": 1.0, "replication": 0.8,
           "raw": 0.5, "analysis": 0.3, "text": 0.1}
 SILENCE_ONLY = {"reality": 1.0, "method": 1.0, "replication": 1.0,
                 "raw": 1.0, "analysis": 1.0, "text": 1.0, "unstated": 1.0}
-from minority_prophet.gate import assess, decide
+from minority_prophet.gate import assess, assess_bounds, decide
 
 
 def env(cid, assertion, depth=None, parent=None):
@@ -123,16 +123,18 @@ class LadderTests(unittest.TestCase):
         w = normalise_depth_weights(LADDER)
         self.assertGreater(w["raw"], w["text"])
 
-    def test_unstated_is_pinned_to_the_weakest_stated_rung(self):
-        """A source that did not say what it did cannot be better than the
-        weakest thing it might have done."""
+    def test_unstated_defaults_to_the_weakest_stated_rung(self):
+        """The conservative END of the range, used when a caller asks for a
+        single number. Not a claim that silence *is* the weakest rung."""
         w = normalise_depth_weights(LADDER)
         self.assertEqual(w["unstated"], min(w[d] for d in WITNESS_DEPTHS))
 
-    def test_unstated_cannot_be_given_a_privileged_weight(self):
-        with self.assertRaises(ValueError) as ctx:
-            normalise_depth_weights(dict(LADDER, unstated=0.9))
-        self.assertIn("cannot be better than the weakest", str(ctx.exception))
+    def test_unstated_may_be_set_anywhere_in_the_range(self):
+        """An eyewitness who omitted the field is still an eyewitness. Refusing
+        the upper end would assert a fact about the source that the record does
+        not support -- and would block `assess_bounds` from computing it."""
+        w = normalise_depth_weights(dict(LADDER, unstated=1.0))
+        self.assertEqual(w["unstated"], 1.0)
 
     def test_unstated_may_be_set_lower_than_the_weakest_rung(self):
         w = normalise_depth_weights(dict(LADDER, unstated=0.0))
@@ -210,3 +212,46 @@ class MigrationHazardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BoundsTests(unittest.TestCase):
+    """Unstated depth is unknown, not weak. The honest report is a range.
+
+    Collapsing unknown to the worst case invents a fact exactly as much as
+    collapsing it to the best case. This is the same treatment `minority-prophet`
+    gives an anonymous witness: bound it, do not pick an end.
+    """
+
+    def test_silent_roots_produce_a_range(self):
+        result = assess_bounds([env("a", 1), env("b", 1)], TrustAllVerifier(),
+                               depth_weights=LADDER)
+        low, high = result.diagnostics["flip_budget_bounds"]
+        self.assertLess(low, high)
+        self.assertFalse(result.diagnostics["depth_determined"])
+
+    def test_fully_stated_evidence_is_determined(self):
+        result = assess_bounds(
+            [env("a", 1, "reality"), env("b", 1, "reality")],
+            TrustAllVerifier(), depth_weights=LADDER)
+        low, high = result.diagnostics["flip_budget_bounds"]
+        self.assertEqual(low, high)
+        self.assertTrue(result.diagnostics["depth_determined"])
+
+    def test_the_gap_is_the_cost_of_the_silence(self):
+        """Not a fact about the sources -- a measure of what was not recorded."""
+        quiet = assess_bounds([env("a", 1), env("b", 1)], TrustAllVerifier(),
+                              depth_weights=LADDER)
+        loud = assess_bounds([env("a", 1, "reality"), env("b", 1, "reality")],
+                             TrustAllVerifier(), depth_weights=LADDER)
+        qlow, qhigh = quiet.diagnostics["flip_budget_bounds"]
+        llow, lhigh = loud.diagnostics["flip_budget_bounds"]
+        self.assertGreater(qhigh - qlow, lhigh - llow)
+
+    def test_the_assessment_exposes_determinacy_directly(self):
+        result = assess_bounds([env("a", 1)], TrustAllVerifier(),
+                               depth_weights=LADDER)
+        self.assertFalse(result.depth_determined)
+
+    def test_no_weights_supplied_means_no_range_to_compute(self):
+        result = assess_bounds([env("a", 1)], TrustAllVerifier())
+        self.assertTrue(result.depth_determined)

@@ -153,9 +153,19 @@ def normalise_depth_weights(weights: Optional[dict]) -> dict:
     away the gradation that motivated the change. Re-running the raw data is not
     the same as re-reading the paper, and the weights must be able to say so.
 
-    `unstated` is set to the **minimum** supplied weight rather than to 1.0 or to
-    a value of its own: a source that did not say what it did cannot be better
-    than the weakest thing it might have done. Unknown is never a privilege.
+    `unstated` has no honest point value. A source that did not say what it did
+    might have been an eyewitness who omitted the field; nothing about the source
+    changed when the field was left blank, only what we may conclude. Pinning it
+    to the weakest rung is a *policy*, not a fact, and asserting it as a fact is
+    the error this package exists to catch.
+
+    So `unstated` is treated as a **range**: `[weakest, strongest]`. Callers get
+    a bound from each end via `assess()`, and a decision that differs across the
+    range escalates rather than picking an end. The default supplied here is the
+    conservative end, used when a caller asks for a single number anyway.
+
+    Collapsing to the worst case invents a fact exactly as much as collapsing to
+    the best case.
 
     `None` means no discounting at all -- every rung 1.0 -- which is the default
     and preserves existing behaviour exactly.
@@ -172,11 +182,15 @@ def normalise_depth_weights(weights: Optional[dict]) -> dict:
         value = float(weights["unstated"])
         if not 0.0 <= value <= 1.0:
             raise ValueError("depth weight for 'unstated' must be between 0 and 1")
-        if value > min(resolved.values()):
-            raise ValueError(
-                "unstated depth cannot outweigh the weakest stated depth: a "
-                "source that did not say what it did cannot be better than the "
-                "weakest thing it might have done")
+        # No constraint tying this to the weakest stated rung. An earlier
+        # version refused any value above it, on the reasoning that a source
+        # which did not say what it did cannot be better than the weakest thing
+        # it might have done. That is false: an eyewitness who omitted the field
+        # is still an eyewitness, and nothing about the source changed when the
+        # field was left blank. The claim was about what we may conclude, stated
+        # as though it were about them -- and the guard then blocked the very
+        # computation needed to express the honest answer, which is a range.
+        # See `gate.assess_bounds`.
         resolved["unstated"] = value
     else:
         resolved["unstated"] = min(resolved.values())

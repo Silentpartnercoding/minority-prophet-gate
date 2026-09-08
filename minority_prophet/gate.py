@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 from .aggregator import aggregate
-from .adapter_acp import AttestationVerifier, DEFAULT_FRESHNESS, envelopes_to_claims
+from .adapter_acp import (AttestationVerifier, DEFAULT_FRESHNESS,
+                          WITNESS_DEPTHS, envelopes_to_claims)
 
 @dataclass
 class GateDecision:
@@ -30,6 +31,18 @@ class EvidenceAssessment:
     roots_against: int
     diagnostics: dict = field(default_factory=dict)
     conversions_to_reverse: Optional[int] = None
+    flip_budget_upper: Optional[float] = None
+    """Attack price if every unstated root turns out to have observed.
+
+    `flip_budget` is the price if none of them did. When the two differ, the
+    evidence does not determine a single price and the gap is the cost of the
+    silence, not a fact about the sources."""
+
+    @property
+    def depth_determined(self) -> bool:
+        """True when no unstated root could change the price."""
+        return (self.flip_budget_upper is None
+                or self.flip_budget_upper == self.flip_budget)
 
 def assess(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
            abstain_margin: float = 0.0, decision_subject=None,
@@ -80,6 +93,31 @@ def assess(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
     return EvidenceAssessment(v.decision, strength_margin, v.confidence,
                               roots_for, roots_against, diag,
                               diag.get("conversions_to_reverse"))
+
+def assess_bounds(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
+                  depth_weights: Optional[dict] = None, **kwargs) -> EvidenceAssessment:
+    """Assess with unstated depth read both ways, and report the range.
+
+    An unstated depth is not a weak depth. It is an unknown one, and the honest
+    report is the interval it supports rather than either endpoint dressed as a
+    measurement. The lower bound assumes every silent root reached only the
+    weakest rung; the upper assumes every one of them observed.
+    """
+    if depth_weights is None:
+        return assess(envelopes, verifier, depth_weights=None, **kwargs)
+    envelopes = list(envelopes)
+    floor = dict(depth_weights)
+    ceiling = dict(depth_weights, unstated=max(
+        float(depth_weights.get(rung, 1.0)) for rung in WITNESS_DEPTHS))
+    low = assess(envelopes, verifier, depth_weights=floor, **kwargs)
+    high = assess(envelopes, verifier, depth_weights=ceiling, **kwargs)
+    low.flip_budget_upper = high.flip_budget
+    low.diagnostics["flip_budget_bounds"] = (low.flip_budget, high.flip_budget)
+    low.diagnostics["verdict_bounds"] = (low.verdict, high.verdict)
+    low.diagnostics["depth_determined"] = (
+        low.flip_budget == high.flip_budget and low.verdict == high.verdict)
+    return low
+
 
 def decide(envelopes: Iterable[dict], verifier: AttestationVerifier, *,
            proceed_side: int = 1, min_flip_budget: float = 1.0,
