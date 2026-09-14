@@ -67,6 +67,16 @@ class AuthorityContinuityGateTests(unittest.TestCase):
             self.assertFalse(SqliteNonceStore(database).consume("n" * 16, "sha256:first"))
             self.assertFalse(SqliteNonceStore(database).consume("n" * 16, "sha256:other"))
 
+    def test_sqlite_nonce_store_closes_its_connections(self):
+        import warnings
+        with tempfile.TemporaryDirectory() as directory, \
+                warnings.catch_warnings():
+            warnings.simplefilter("error", ResourceWarning)
+            store = SqliteNonceStore(str(Path(directory) / "nonces.sqlite3"))
+            for i in range(50):
+                self.assertTrue(store.consume(f"nonce-{i:04d}-padding", "sha256:x"))
+            import gc; gc.collect()
+
     def authorize(self, value=None, effect=None, **overrides):
         kwargs = {
             "expected_audience": "vendor.example",

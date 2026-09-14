@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+from contextlib import closing
 import sqlite3
 from threading import Lock
 from typing import Any, Callable, Protocol
@@ -68,7 +69,7 @@ class SqliteNonceStore:
         if not database:
             raise ValueError("database path is required")
         self.database = database
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS continuity_nonces ("
                 "nonce TEXT PRIMARY KEY, binding_digest TEXT NOT NULL, "
@@ -84,7 +85,7 @@ class SqliteNonceStore:
         if not nonce or not binding_digest:
             raise ValueError("nonce and binding digest are required")
         try:
-            with self._connect() as connection:
+            with closing(self._connect()) as connection, connection:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
                     "INSERT INTO continuity_nonces (nonce, binding_digest) VALUES (?, ?)",
