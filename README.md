@@ -63,7 +63,7 @@ the explicit path from evaluation to an installed enforcement integration.
 
 **Refuse manufactured consensus.** A drop-in gate for multi-agent systems that
 counts *independent, attested evidence roots* instead of voices — so seven
-agents repeating one unverified guess can never outvote two agents who
+agents repeating one unverified guess, with the repetition on record, can never outvote two agents who
 actually checked.
 
 > **Research status:** REPLICA results pending canonical re-runs. The gate is a reference implementation; its library tests do not establish production safety.
@@ -82,7 +82,9 @@ copies, re-broadcasts, summaries, sybils, and conformity-injection attacks
 implements evidence-root aggregation, whose core properties are
 **machine-checked under the stated model**, not tuned:
 
-- **T2 — Copy invariance:** duplicating a claim can never change the verdict.
+- **T2 — Copy invariance:** duplicating a claim *whose parent is recorded* can never
+  change the verdict. The hypothesis is part of the theorem: a copy with no
+  recorded parent is indistinguishable from a new root and is counted as one.
 - **T1 — Immunity:** given side-consistent attestations **and an unchanged set of
   origins**, the verdict is invariant under arbitrary corruption of who-copied-whom
   among the rest. Lineage accuracy between claims is irrelevant; only origins
