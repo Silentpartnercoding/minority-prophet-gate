@@ -201,8 +201,8 @@ def stated_depth(attest: dict) -> Optional[str]:
     """The declared depth, or None when unstated or unrecognised.
 
     An unrecognised value reads as unstated: a producer sending a word this
-    version does not know has not stated a depth, and silence is the
-    conservative reading.
+    version does not know has not stated a depth, and silence claims
+    nothing about what the source did.
     """
     value = attest.get("witness_depth")
     return value if value in WITNESS_DEPTHS else None
