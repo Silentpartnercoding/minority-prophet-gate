@@ -14,9 +14,12 @@ from .adapter_acp import (
 )
 from .authority_continuity import (
     ContinuityGateError,
+    GateContinuityTrustProvider,
     InMemoryNonceStore,
     NonceStore,
+    SqliteNonceStore,
     authorize_continuous_effect,
+    authorize_continuous_effect_with_provider,
 )
 from .aggregator import Claim, EvidenceGraph, Verdict, aggregate
 from .autonomy import (
@@ -47,6 +50,7 @@ from .control_plane import (
     VerifiedEvidenceBatch,
 )
 from .evidence_ledger import AuthenticatedSqliteEvidenceLedger
+from .execution_receipt import issue_execution_receipt, verify_execution_receipt
 from .case_store import AuthenticatedSqliteCaseStore
 from .receipt_verifier import (
     RECEIPT_SCHEMA,
@@ -93,6 +97,7 @@ __version__ = "0.1.0"
 __all__ = [
     "AttestationVerifier",
     "ContinuityGateError",
+    "GateContinuityTrustProvider",
     "AutonomyController",
     "AutonomyLevel",
     "AutonomyMandate",
@@ -129,6 +134,7 @@ __all__ = [
     "EvidenceRouter",
     "EvidenceRoutingError",
     "EvidenceVerifierBridge",
+    "issue_execution_receipt",
     "EmergencyNotifier",
     "GateDecision",
     "GateRelease",
@@ -139,6 +145,7 @@ __all__ = [
     "InProcessToolRuntime",
     "MemoryEvidenceAssessment",
     "NonceStore",
+    "SqliteNonceStore",
     "RuntimeAction",
     "RuntimeAdapter",
     "RuntimeBoundaryError",
@@ -152,10 +159,12 @@ __all__ = [
     "TrustAllVerifier",
     "Verdict",
     "VerifiedEvidenceBatch",
+    "verify_execution_receipt",
     "aggregate",
     "assess",
     "assess_memory_evidence",
     "authorize_continuous_effect",
+    "authorize_continuous_effect_with_provider",
     "decide",
     "envelopes_to_claims",
     "issue_evidence_request",
