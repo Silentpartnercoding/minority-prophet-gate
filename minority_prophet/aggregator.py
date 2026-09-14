@@ -4,7 +4,8 @@ Implements the evidence-root aggregator whose core properties are proved in
 formal/PROOFS.md and machine-verified by formal/verify_proofs.py:
   T1 Immunity: verdicts invariant under side-preserving, root-preserving
      lineage rewiring.
-  T2 Copy invariance: duplicating claims never changes the verdict.
+  T2 Copy invariance: duplicating claims whose parent edge is recorded never
+     changes the verdict. An unrecorded copy is a new root.
   T4 Margin flip condition: phantom root flow equal to the margin forces
      abstention; one additional unit reverses the verdict. "Flow" is NET
      PER-SIDE gain (p0 - p1), not the number of roots crossing sides -- under
