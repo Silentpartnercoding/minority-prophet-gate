@@ -117,7 +117,12 @@ def authorize_continuous_effect(
     nonce_store: NonceStore,
     now: datetime | None = None,
 ) -> GateDecision:
-    """Authorize exactly one effect or fail closed with a typed reason."""
+    """Authorize exactly one effect or fail closed with a typed reason.
+
+    A continuity proceed is a seal check, not an evidence-root verdict.
+    `flip_budget` and `roots_for` are therefore zero: a caller that treats
+    every `GateDecision` as `assess()` output must not read a fake margin of 1.
+    """
 
     required = {
         "schema", "verification", "mandate_id", "mandate_digest",
@@ -167,8 +172,10 @@ def authorize_continuous_effect(
         return GateDecision("block", 0, 0.0, 1.0, 0, 1,
                             {"reason": str(exc), "authority_continuity": False})
 
-    return GateDecision("proceed", 1, 1.0, 1.0, 1, 0, {
+    return GateDecision("proceed", None, 0.0, 0.0, 0, 0, {
         "authority_continuity": True,
+        "evidence_assessed": False,
+        "not_an_evidence_margin": True,
         "mandate_id": receipt["mandate_id"],
         "chain_digest": receipt["chain_digest"],
         "effect_digest": receipt["final_effect_digest"],

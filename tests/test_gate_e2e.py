@@ -66,5 +66,19 @@ class TestPR482EndToEnd(unittest.TestCase):
         self.assertEqual(d.action, "block")      # orphan contributes no root
         self.assertEqual(d.roots_for, 0)
 
+    def test_shared_origin_under_trust_all_manufactures_independence(self):
+        """Documented adapter hole: origin is freshness, not root identity.
+        TrustAllVerifier + one origin + no derived_from mints N roots.
+        This test pins the hazard so nobody reads origin as collapse."""
+        envs = [
+            {"claim_id": f"c{i}", "agent": f"writer-{i}", "assertion": "SAFE",
+             "attest": {"origin": "scan-shared", "sig": "attestation:demo"}}
+            for i in range(5)
+        ]
+        d = decide(envs, TrustAllVerifier(), proceed_side=1, min_flip_budget=2.0)
+        self.assertEqual(d.roots_for, 5)
+        self.assertEqual(d.action, "proceed")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
