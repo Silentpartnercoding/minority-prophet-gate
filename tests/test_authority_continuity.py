@@ -89,7 +89,13 @@ class AuthorityContinuityGateTests(unittest.TestCase):
         return authorize_continuous_effect(value or receipt(), effect or EFFECT, **kwargs)
 
     def test_exact_current_effect_proceeds(self):
-        self.assertEqual("proceed", self.authorize().action)
+        decision = self.authorize()
+        self.assertEqual("proceed", decision.action)
+        self.assertEqual(0.0, decision.flip_budget)
+        self.assertIsNone(decision.decision)
+        self.assertTrue(decision.diagnostics["authority_continuity"])
+        self.assertTrue(decision.diagnostics["not_an_evidence_margin"])
+        self.assertFalse(decision.diagnostics["evidence_assessed"])
 
     def test_every_final_effect_mutation_blocks(self):
         mutations = {
