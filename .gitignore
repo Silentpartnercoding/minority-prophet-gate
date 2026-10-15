@@ -13,3 +13,5 @@ releasewarden.sqlite3
 .env
 node_modules/
 .wrangler/
+releasewarden-crossing/
+releasewarden-crossing-result/
