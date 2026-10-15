@@ -1,0 +1,12 @@
+{
+  "name": "releasewarden-crossing-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "deploy:dry": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "4.116.0"
+  }
+}
