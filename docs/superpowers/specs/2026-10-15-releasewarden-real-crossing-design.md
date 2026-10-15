@@ -152,18 +152,36 @@ crossing workflow. It:
 1. checks out the exact SHA;
 2. waits for the existing test/package/Semgrep evidence;
 3. creates the bounded mandate and fixture artifact;
-4. references `environment: releasewarden-sandbox`, causing GitHub to call the
+4. uploads the mandate as a dedicated, short-lived GitHub Actions artifact;
+5. references `environment: releasewarden-sandbox`, causing GitHub to call the
    custom protection rule;
-5. deploys only the fixture to a dedicated Cloudflare preview Worker after
+6. deploys only the fixture to a dedicated Cloudflare preview Worker after
    GitHub releases the job;
-6. reads the public fixture back over HTTPS;
-7. compares the returned SHA and digest to the mandate;
-8. uploads a non-secret evidence bundle as a GitHub Actions artifact and writes
+7. reads the public fixture back over HTTPS;
+8. compares the returned SHA and digest to the mandate;
+9. uploads a non-secret evidence bundle as a GitHub Actions artifact and writes
    a concise run summary.
 
 The workflow has `workflow_dispatch` only for the first milestone. It uses a
 GitHub Environment secret containing a narrowly scoped Cloudflare API token and
 the Cloudflare account ID. The secret is never printed or placed in an artifact.
+
+### Mandate transport
+
+GitHub's deployment-protection webhook identifies the workflow run but does not
+carry arbitrary workflow files. The build job therefore uploads exactly one
+artifact named `releasewarden-mandate-v1` before the environment job begins.
+Using its existing read-only Actions permission, the GitHub App lists artifacts
+for the webhook's workflow run, requires exactly one unexpired artifact whose
+record is bound to the same repository and head SHA, downloads its GitHub-
+reported ZIP archive, and extracts exactly one bounded `mandate.json` entry.
+
+The Worker rejects duplicate names, expired artifacts, redirects outside
+GitHub's documented artifact-download flow, archives over the configured byte
+limit, path traversal, symlinks, extra entries, compression bombs, and content
+whose digest does not match the artifact metadata. The artifact is a transport,
+not a new source of authority: all mandate fields must still match the signed
+webhook, the frozen policy digest, and fixed crossing target.
 
 ### 3. Hosted Worker decision receipt
 
