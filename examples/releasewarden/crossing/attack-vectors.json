@@ -1,0 +1,18 @@
+{
+  "schema": "releasewarden.crossing-vectors.v1",
+  "base_mandate": "mandate.valid.json",
+  "vectors": [
+    {"id": "valid", "mutation": {}, "expected_code": "continuity_valid"},
+    {"id": "repository-id", "mutation": {"deployment.repositoryId": 999}, "expected_code": "repository_id_mismatch"},
+    {"id": "repository-name", "mutation": {"deployment.repository": "Silentpartnercoding/other"}, "expected_code": "repository_mismatch"},
+    {"id": "sha", "mutation": {"deployment.sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, "expected_code": "sha_mismatch"},
+    {"id": "run-id", "mutation": {"deployment.runId": 778}, "expected_code": "run_id_mismatch"},
+    {"id": "run-attempt", "mutation": {"deployment.runAttempt": 2}, "expected_code": "run_attempt_mismatch"},
+    {"id": "environment", "mutation": {"deployment.environment": "production"}, "expected_code": "environment_mismatch"},
+    {"id": "effect-kind", "mutation": {"context.effectKind": "delete"}, "expected_code": "effect_kind_mismatch"},
+    {"id": "destination", "mutation": {"context.destination": "https://attacker.example/effect"}, "expected_code": "destination_mismatch"},
+    {"id": "artifact", "mutation": {"context.artifactDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}, "expected_code": "artifact_digest_mismatch"},
+    {"id": "policy", "mutation": {"context.policyDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}, "expected_code": "policy_digest_mismatch"},
+    {"id": "expired", "mutation": {"context.now": "2026-10-15T19:20:01.000Z"}, "expected_code": "mandate_expired"}
+  ]
+}
