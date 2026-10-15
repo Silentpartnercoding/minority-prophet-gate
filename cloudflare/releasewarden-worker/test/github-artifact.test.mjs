@@ -136,3 +136,35 @@ test("rejects malformed JSON and signed download failures without leaking the UR
     (error) => !error.message.includes("results-receiver"),
   );
 });
+
+test("cancels a lengthless artifact stream as soon as it crosses the byte cap", async () => {
+  const bytes = archive();
+  const item = await metadata(bytes);
+  let cancelled = false;
+  let emitted = 0;
+  const download = {
+    ok: true,
+    headers: new Headers(),
+    body: {
+      getReader: () => ({
+        read: async () => emitted++ < 2 ?
+          { done: false, value: new Uint8Array(40 * 1024) } : { done: true },
+        cancel: async () => { cancelled = true; },
+      }),
+    },
+  };
+  const fetchImpl = async (url) => {
+    if (String(url).includes(`/actions/runs/${RUN_ID}/artifacts`)) {
+      return Response.json({ total_count: 1, artifacts: [item] });
+    }
+    if (String(url) === item.archive_download_url) {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://results-receiver.actions.githubusercontent.com/signed" },
+      });
+    }
+    return download;
+  };
+  await assert.rejects(fetchMandateArtifact(deployment(), "token", fetchImpl), /size|large/i);
+  assert.equal(cancelled, true);
+});

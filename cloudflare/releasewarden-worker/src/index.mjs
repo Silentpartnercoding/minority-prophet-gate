@@ -432,7 +432,7 @@ export class D1DeliveryJournal {
       if (existing.status === "failed") {
         await this.db.prepare(
           "UPDATE deliveries SET status = 'processing', decision_json = NULL, receipt_json = NULL, " +
-          "nonce_digest = NULL, callback_status = 'pending', completed_at = NULL " +
+          "callback_status = 'pending', completed_at = NULL " +
           "WHERE delivery_id = ?1 AND status = 'failed'",
         ).bind(deliveryId).run();
         return null;
@@ -453,22 +453,28 @@ export class D1DeliveryJournal {
     return null;
   }
 
-  async complete(deliveryId, values) {
+  async claimNonce(deliveryId, nonceDigest, mandateId, policyDigest) {
     try {
       await this.db.prepare(
-        "UPDATE deliveries SET status = 'completed', decision_json = ?1, receipt_json = ?2, " +
-        "mandate_id = ?3, nonce_digest = ?4, policy_digest = ?5, callback_status = 'approved', " +
-        "completed_at = ?6 WHERE delivery_id = ?7 AND status = 'processing'",
-      ).bind(
-        JSON.stringify(values.decision), JSON.stringify(values.receipt), values.mandateId,
-        values.nonceDigest, values.policyDigest, values.completedAt, deliveryId,
-      ).run();
+        "UPDATE deliveries SET nonce_digest = ?1, mandate_id = ?2, policy_digest = ?3 " +
+        "WHERE delivery_id = ?4 AND status = 'processing'",
+      ).bind(nonceDigest, mandateId, policyDigest, deliveryId).run();
+      return true;
     } catch (error) {
-      if (/unique|nonce/i.test(String(error))) {
-        throw new ReleaseWardenError("mandate nonce was already completed", 409);
-      }
+      if (/unique|nonce/i.test(String(error))) return false;
       throw error;
     }
+  }
+
+  async complete(deliveryId, values) {
+    await this.db.prepare(
+      "UPDATE deliveries SET status = 'completed', decision_json = ?1, receipt_json = ?2, " +
+      "mandate_id = ?3, policy_digest = ?4, callback_status = 'approved', " +
+      "completed_at = ?5 WHERE delivery_id = ?6 AND status = 'processing'",
+    ).bind(
+      JSON.stringify(values.decision), JSON.stringify(values.receipt), values.mandateId,
+      values.policyDigest, values.completedAt, deliveryId,
+    ).run();
   }
 
   async fail(deliveryId, completedAt) {
@@ -555,6 +561,7 @@ export async function processWebhook(request, env, overrides = {}) {
     let mandate = null;
     let policyDigest = null;
     let continuity = { valid: false, code: "authority_evidence_unavailable", details: {} };
+    let claimedNonceDigest = null;
     let decision;
     try {
       const rawPolicy = await dependencies.repositoryPolicy(deployment, token);
@@ -563,6 +570,11 @@ export async function processWebhook(request, env, overrides = {}) {
       const artifact = await dependencies.fetchMandateArtifact(deployment, token);
       mandate = validateMandate(artifact.mandate, now);
       policyDigest = await sha256Digest(policy);
+      const nonceDigest = await sha256Digest(mandate.nonce);
+      const nonceClaimed = await journal.claimNonce(
+        deliveryId, nonceDigest, mandate.mandate_id, policyDigest,
+      );
+      if (nonceClaimed) claimedNonceDigest = nonceDigest;
       const effectDocument = {
         schema: "releasewarden.effect.v1",
         sha: deployment.sha,
@@ -576,6 +588,9 @@ export async function processWebhook(request, env, overrides = {}) {
         policyDigest,
         now,
       });
+      if (!nonceClaimed) {
+        continuity = { valid: false, code: "mandate_nonce_reused", details: { field: "nonce" } };
+      }
       decision = continuity.valid ? evaluateRelease(deployment, policy, observations) :
         continuityDecision(deployment, policy, continuity);
     } catch {
@@ -590,7 +605,7 @@ export async function processWebhook(request, env, overrides = {}) {
     );
     await journal.complete(deliveryId, {
       decision, receipt, mandateId: mandate?.mandate_id ?? null,
-      nonceDigest: mandate ? await sha256Digest(mandate.nonce) : null, policyDigest,
+      nonceDigest: claimedNonceDigest, policyDigest,
       completedAt: callbackAt,
     });
     return receipt;

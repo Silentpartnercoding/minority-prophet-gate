@@ -35,20 +35,25 @@ class FakeDB {
       const row = this.rows.get(values[0]);
       if (row?.status === "failed") Object.assign(row, {
         status: "processing", decision_json: null, receipt_json: null,
-        nonce_digest: null, callback_status: "pending", completed_at: null,
+        callback_status: "pending", completed_at: null,
+      });
+      return { success: true };
+    }
+    if (sql.includes("SET nonce_digest = ?1")) {
+      const [nonceDigest, mandateId, policyDigest, deliveryId] = values;
+      for (const [id, row] of this.rows) {
+        if (id !== deliveryId && row.nonce_digest === nonceDigest) throw new Error("unique nonce");
+      }
+      Object.assign(this.rows.get(deliveryId), {
+        nonce_digest: nonceDigest, mandate_id: mandateId, policy_digest: policyDigest,
       });
       return { success: true };
     }
     if (sql.includes("status = 'completed'")) {
-      const [decisionJson, receiptJson, mandateId, nonceDigest, policyDigest, completedAt, deliveryId] = values;
-      for (const [id, row] of this.rows) {
-        if (id !== deliveryId && row.status === "completed" && row.nonce_digest === nonceDigest) {
-          throw new Error("unique nonce");
-        }
-      }
+      const [decisionJson, receiptJson, mandateId, policyDigest, completedAt, deliveryId] = values;
       Object.assign(this.rows.get(deliveryId), {
         status: "completed", decision_json: decisionJson, receipt_json: receiptJson,
-        mandate_id: mandateId, nonce_digest: nonceDigest, policy_digest: policyDigest,
+        mandate_id: mandateId, policy_digest: policyDigest,
         callback_status: "approved", completed_at: completedAt,
       });
       return { success: true };
@@ -160,6 +165,7 @@ test("journal rejects body substitution, concurrent duplicates, and completed no
   assert.equal(await journal.begin("delivery-a", "sha256:aaa", NOW), null);
   await assert.rejects(journal.begin("delivery-a", "sha256:bbb", NOW), /different body/i);
   await assert.rejects(journal.begin("delivery-a", "sha256:aaa", NOW), /processing/i);
+  assert.equal(await journal.claimNonce("delivery-a", "sha256:nonce", "rw_one", "sha256:policy"), true);
   await journal.complete("delivery-a", {
     decision: { state: "approved" }, receipt: { schema: "releasewarden.receipt.v1" },
     mandateId: "rw_one", nonceDigest: "sha256:nonce", policyDigest: "sha256:policy",
@@ -168,10 +174,9 @@ test("journal rejects body substitution, concurrent duplicates, and completed no
   const replay = await journal.begin("delivery-a", "sha256:aaa", NOW);
   assert.equal(replay.status, "completed");
   await journal.begin("delivery-b", "sha256:ccc", NOW);
-  await assert.rejects(journal.complete("delivery-b", {
-    decision: {}, receipt: {}, mandateId: "rw_two", nonceDigest: "sha256:nonce",
-    policyDigest: "sha256:policy", completedAt: NOW,
-  }), /nonce/i);
+  assert.equal(await journal.claimNonce(
+    "delivery-b", "sha256:nonce", "rw_two", "sha256:policy",
+  ), false);
 });
 
 test("failed delivery becomes retryable", async () => {
@@ -234,4 +239,22 @@ test("missing mandate evidence records escalation but shadow still releases GitH
   assert.equal(state.callbacks.length, 1);
   assert.equal(state.db.rows.get("delivery-1").status, "completed");
   assert.equal(JSON.stringify(receipt).includes("signed-url-secret"), false);
+});
+
+test("reused mandate nonce is blocked before a second shadow callback completes", async () => {
+  const state = await setup();
+  const env = {
+    DB: state.db, GITHUB_WEBHOOK_SECRET: "webhook-secret",
+    CROSSING_EFFECT_KIND: "cloudflare-worker-fixture",
+    CROSSING_DESTINATION: "https://releasewarden-crossing-fixture.example.workers.dev/effect",
+  };
+  const first = await processWebhook(await signedRequest("delivery-1"), env, state.dependencies);
+  assert.equal(first.gate.action, "proceed");
+  const second = await processWebhook(await signedRequest("delivery-2"), env, state.dependencies);
+  assert.equal(second.gate.action, "block");
+  assert.equal(second.continuity.code, "mandate_nonce_reused");
+  assert.equal(second.callback.state, "approved");
+  assert.equal(state.callbacks.length, 2);
+  assert.equal(state.db.rows.get("delivery-2").status, "completed");
+  assert.equal(state.db.rows.get("delivery-2").nonce_digest, null);
 });

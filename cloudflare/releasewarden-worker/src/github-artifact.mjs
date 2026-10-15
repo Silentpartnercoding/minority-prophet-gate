@@ -33,9 +33,26 @@ async function boundedBytes(response) {
   if (!response.ok) throw new ArtifactError("mandate artifact download failed");
   const declared = Number(response.headers.get("content-length") ?? 0);
   if (declared > MAX_ARCHIVE_BYTES) throw new ArtifactError("mandate artifact archive is too large");
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (!bytes.byteLength || bytes.byteLength > MAX_ARCHIVE_BYTES) {
-    throw new ArtifactError("mandate artifact archive has an invalid size");
+  if (!response.body) throw new ArtifactError("mandate artifact archive has an invalid size");
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_ARCHIVE_BYTES) {
+      await reader.cancel();
+      throw new ArtifactError("mandate artifact archive is too large");
+    }
+    chunks.push(value);
+  }
+  if (!size) throw new ArtifactError("mandate artifact archive has an invalid size");
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
   }
   return bytes;
 }

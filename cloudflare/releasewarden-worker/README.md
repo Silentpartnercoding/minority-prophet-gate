@@ -99,8 +99,8 @@ npx wrangler d1 migrations apply releasewarden-experimental --remote
 `0002_crossing_receipts.sql` adds sanitized receipt, Mandate ID, nonce digest,
 policy digest, and callback state fields. It does not store the raw Mandate
 nonce, GitHub token, webhook secret, private key, signed artifact URL, or request
-body. A completed nonce digest is unique, so a second delivery cannot reuse the
-same completed Mandate.
+body. A nonce digest is claimed before the GitHub callback, so a second delivery
+cannot reuse the same Mandate even while the first delivery is retrying.
 
 The Worker retrieves exactly one `releasewarden-mandate-v1` artifact from the
 authenticated webhook's workflow run using Actions read permission. ZIP count,

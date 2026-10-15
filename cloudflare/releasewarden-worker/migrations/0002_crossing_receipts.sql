@@ -9,6 +9,6 @@ UPDATE deliveries
 SET callback_status = CASE WHEN status = 'completed' THEN 'approved' ELSE 'failed' END
 WHERE callback_status IS NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS deliveries_completed_nonce_idx
+CREATE UNIQUE INDEX IF NOT EXISTS deliveries_nonce_idx
   ON deliveries(nonce_digest)
-  WHERE status = 'completed' AND nonce_digest IS NOT NULL;
+  WHERE nonce_digest IS NOT NULL;
