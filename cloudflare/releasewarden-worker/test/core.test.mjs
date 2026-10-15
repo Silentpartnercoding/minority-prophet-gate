@@ -2,14 +2,20 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  buildDecisionReceipt,
   callbackBody,
   evaluateRelease,
   parseDeploymentRequest,
   validatePolicy,
   verifyWebhookSignature,
 } from "../src/index.mjs";
+import { validateMandate } from "../src/crossing.mjs";
+import { readFile } from "node:fs/promises";
 
 const SHA = "a".repeat(40);
+const mandateFixture = JSON.parse(await readFile(
+  new URL("../../../examples/releasewarden/crossing/mandate.valid.json", import.meta.url), "utf8",
+));
 
 function deployment() {
   return {
@@ -61,6 +67,7 @@ test("requires an exact SHA and exact GitHub callback route", () => {
     deployment_callback_url: "https://api.github.com/repos/acme/service/actions/runs/12/deployment_protection_rule",
     repository: { id: 1, full_name: "acme/service" },
     installation: { id: 2 },
+    workflow_run: { id: 12, run_attempt: 1 },
   };
   assert.equal(parseDeploymentRequest(payload, "delivery").sha, SHA);
   assert.throws(() => parseDeploymentRequest({ ...payload, sha: "main" }, "delivery"));
@@ -95,4 +102,47 @@ test("hosted callback always releases because preview is shadow-only", () => {
 test("refuses enforce policies in the hosted experimental worker", () => {
   const raw = { ...policy(), mode: "enforce" };
   assert.throws(() => validatePolicy(raw), /shadow mode/);
+});
+
+test("builds a sanitized, deterministic decision receipt", async () => {
+  const mandate = validateMandate(mandateFixture, new Date("2026-10-15T19:00:00.000Z"));
+  const request = {
+    ...deployment(),
+    deliveryId: "secret-delivery-id",
+    repositoryId: mandate.repository.id,
+    runId: mandate.workflow.run_id,
+    runAttempt: mandate.workflow.run_attempt,
+    callbackUrl: "https://api.github.com/repos/acme/service/actions/runs/1/deployment_protection_rule",
+  };
+  const decision = evaluateRelease(request, policy(), observations());
+  const receipt = await buildDecisionReceipt(
+    request,
+    mandate,
+    policy(),
+    observations().reverse(),
+    { valid: true, code: "continuity_valid", details: {} },
+    decision,
+    { receivedAt: "2026-10-15T19:00:00.000Z", callbackAt: "2026-10-15T19:00:01.000Z" },
+  );
+  assert.equal(receipt.schema, "releasewarden.receipt.v1");
+  assert.match(receipt.delivery_digest, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(receipt.repository.id, mandate.repository.id);
+  assert.equal(receipt.repository.full_name, "acme/service");
+  assert.equal(receipt.sha, SHA);
+  assert.equal(receipt.environment, "production");
+  assert.equal(receipt.mandate_id, mandate.mandate_id);
+  assert.match(receipt.nonce_digest, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(receipt.policy_digest, mandate.policy_digest);
+  assert.deepEqual(receipt.evidence.map((item) => item.check_run_id), [1, 2]);
+  assert.equal(receipt.gate.state, "approved");
+  assert.equal(receipt.gate.action, "proceed");
+  assert.equal(receipt.callback.state, "approved");
+  assert.deepEqual(receipt.timestamps, {
+    received_at: "2026-10-15T19:00:00.000Z",
+    callback_at: "2026-10-15T19:00:01.000Z",
+  });
+  const serialized = JSON.stringify(receipt);
+  for (const forbidden of [
+    "secret-delivery-id", mandate.nonce, "callbackUrl", "api.github.com", "token", "private_key",
+  ]) assert.equal(serialized.includes(forbidden), false, forbidden);
 });

@@ -5,6 +5,11 @@ const FAILURE = new Set([
   "failure", "cancelled", "timed_out", "action_required", "startup_failure",
 ]);
 
+import {
+  canonicalJson, evaluateContinuity, sha256Digest, validateMandate,
+} from "./crossing.mjs";
+import { fetchMandateArtifact } from "./github-artifact.mjs";
+
 export class ReleaseWardenError extends Error {
   constructor(message, status = 422) {
     super(message);
@@ -88,7 +93,11 @@ export function parseDeploymentRequest(payload, deliveryId) {
   }
   const repositoryId = Number(repository?.id);
   const installationId = Number(installation?.id);
-  if (!Number.isSafeInteger(repositoryId) || !Number.isSafeInteger(installationId)) {
+  const runId = Number(payload?.workflow_run?.id);
+  const runAttempt = Number(payload?.workflow_run?.run_attempt);
+  if (!Number.isSafeInteger(repositoryId) || !Number.isSafeInteger(installationId) ||
+      !Number.isSafeInteger(runId) || !Number.isSafeInteger(runAttempt) ||
+      repositoryId < 1 || installationId < 1 || runId < 1 || runAttempt < 1) {
     throw new ReleaseWardenError("malformed repository or installation identity");
   }
   return {
@@ -101,6 +110,8 @@ export function parseDeploymentRequest(payload, deliveryId) {
     sha,
     ref: String(payload.ref ?? payload.deployment?.ref ?? ""),
     callbackUrl,
+    runId,
+    runAttempt,
   };
 }
 
@@ -252,6 +263,40 @@ export function callbackBody(deployment, decision) {
   };
 }
 
+export async function buildDecisionReceipt(
+  deployment, mandate, policy, observations, continuity, decision, timestamps,
+) {
+  const evidence = observations.map((item) => ({
+    check_run_id: item.check_run_id,
+    name: item.name,
+    provider: item.app_slug,
+    status: item.status,
+    conclusion: item.conclusion,
+  })).sort((left, right) => left.check_run_id - right.check_run_id);
+  return {
+    schema: "releasewarden.receipt.v1",
+    delivery_digest: await sha256Digest(deployment.deliveryId),
+    repository: {
+      id: deployment.repositoryId,
+      full_name: `${deployment.owner}/${deployment.repository}`,
+    },
+    sha: deployment.sha,
+    environment: deployment.environment,
+    mandate_id: mandate?.mandate_id ?? null,
+    nonce_digest: mandate ? await sha256Digest(mandate.nonce) : null,
+    policy_digest: mandate?.policy_digest ?? null,
+    policy_id: policy?.policy_id ?? "unavailable",
+    continuity: { valid: continuity.valid, code: continuity.code },
+    evidence,
+    gate: { state: decision.state, action: decision.gate_action, reason: decision.reason },
+    callback: { state: "approved", mode: "shadow" },
+    timestamps: {
+      received_at: timestamps.receivedAt,
+      callback_at: timestamps.callbackAt,
+    },
+  };
+}
+
 async function githubJwt(appId, pkcs8Pem) {
   const now = Math.floor(Date.now() / 1000);
   const header = base64Url(new TextEncoder().encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
@@ -372,35 +417,111 @@ async function checkRuns(deployment, token) {
   }));
 }
 
-async function beginDelivery(db, deliveryId, digest) {
-  const existing = await db.prepare(
-    "SELECT body_digest, status, decision_json FROM deliveries WHERE delivery_id = ?1",
-  ).bind(deliveryId).first();
-  if (existing) {
-    if (existing.body_digest !== digest) {
-      throw new ReleaseWardenError("delivery ID replayed with a different body", 409);
+export class D1DeliveryJournal {
+  constructor(db) { this.db = db; }
+
+  async begin(deliveryId, digest, createdAt) {
+    const existing = await this.db.prepare(
+      "SELECT body_digest, status, decision_json, receipt_json, nonce_digest, callback_status " +
+      "FROM deliveries WHERE delivery_id = ?1",
+    ).bind(deliveryId).first();
+    if (existing) {
+      if (existing.body_digest !== digest) {
+        throw new ReleaseWardenError("delivery ID replayed with a different body", 409);
+      }
+      if (existing.status === "failed") {
+        await this.db.prepare(
+          "UPDATE deliveries SET status = 'processing', decision_json = NULL, receipt_json = NULL, " +
+          "nonce_digest = NULL, callback_status = 'pending', completed_at = NULL " +
+          "WHERE delivery_id = ?1 AND status = 'failed'",
+        ).bind(deliveryId).run();
+        return null;
+      }
+      if (existing.status === "processing") {
+        throw new ReleaseWardenError("delivery is already processing", 409);
+      }
+      return existing;
     }
-    if (existing.status === "failed") {
-      await db.prepare(
-        "UPDATE deliveries SET status = 'processing', decision_json = NULL, completed_at = NULL " +
-        "WHERE delivery_id = ?1 AND status = 'failed'",
-      ).bind(deliveryId).run();
-      return null;
+    try {
+      await this.db.prepare(
+        "INSERT INTO deliveries (delivery_id, body_digest, status, callback_status, created_at) " +
+        "VALUES (?1, ?2, 'processing', 'pending', ?3)",
+      ).bind(deliveryId, digest, createdAt).run();
+    } catch {
+      throw new ReleaseWardenError("concurrent duplicate delivery", 409);
     }
-    return existing;
+    return null;
   }
-  try {
-    await db.prepare(
-      "INSERT INTO deliveries (delivery_id, body_digest, status, created_at) " +
-      "VALUES (?1, ?2, 'processing', ?3)",
-    ).bind(deliveryId, digest, new Date().toISOString()).run();
-  } catch {
-    throw new ReleaseWardenError("concurrent duplicate delivery", 409);
+
+  async complete(deliveryId, values) {
+    try {
+      await this.db.prepare(
+        "UPDATE deliveries SET status = 'completed', decision_json = ?1, receipt_json = ?2, " +
+        "mandate_id = ?3, nonce_digest = ?4, policy_digest = ?5, callback_status = 'approved', " +
+        "completed_at = ?6 WHERE delivery_id = ?7 AND status = 'processing'",
+      ).bind(
+        JSON.stringify(values.decision), JSON.stringify(values.receipt), values.mandateId,
+        values.nonceDigest, values.policyDigest, values.completedAt, deliveryId,
+      ).run();
+    } catch (error) {
+      if (/unique|nonce/i.test(String(error))) {
+        throw new ReleaseWardenError("mandate nonce was already completed", 409);
+      }
+      throw error;
+    }
   }
-  return null;
+
+  async fail(deliveryId, completedAt) {
+    await this.db.prepare(
+      "UPDATE deliveries SET status = 'failed', callback_status = 'failed', completed_at = ?1 " +
+      "WHERE delivery_id = ?2 AND status = 'processing'",
+    ).bind(completedAt, deliveryId).run();
+  }
 }
 
-async function processWebhook(request, env) {
+function continuityDecision(deployment, policy, continuity) {
+  return {
+    schema: "releasewarden.decision.v1",
+    state: "rejected",
+    gate_action: "block",
+    reason: `authority continuity failed: ${continuity.code}`,
+    mode: "shadow",
+    repository: `${deployment.owner}/${deployment.repository}`,
+    environment: deployment.environment,
+    sha: deployment.sha,
+    evidence: [],
+    diagnostics: { policy_id: policy.policy_id, continuity_code: continuity.code },
+  };
+}
+
+function unavailableDecision(deployment) {
+  return {
+    schema: "releasewarden.decision.v1",
+    state: "rejected",
+    gate_action: "escalate",
+    reason: "required authority evidence is unavailable",
+    mode: "shadow",
+    repository: `${deployment.owner}/${deployment.repository}`,
+    environment: deployment.environment,
+    sha: deployment.sha,
+    evidence: [],
+    diagnostics: { policy_id: "unavailable", continuity_code: "authority_evidence_unavailable" },
+  };
+}
+
+const defaultDependencies = {
+  now: () => new Date(),
+  installationToken,
+  repositoryPolicy,
+  checkRuns,
+  fetchMandateArtifact,
+  githubJson,
+};
+
+export async function processWebhook(request, env, overrides = {}) {
+  const dependencies = { ...defaultDependencies, ...overrides };
+  const now = dependencies.now();
+  const receivedAt = now.toISOString();
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
   if (declaredLength > MAX_BODY_BYTES) {
     throw new ReleaseWardenError("webhook body is too large", 413);
@@ -419,52 +540,62 @@ async function processWebhook(request, env) {
   const deliveryId = request.headers.get("x-github-delivery");
   if (!deliveryId) throw new ReleaseWardenError("missing GitHub delivery ID", 400);
   const digest = `sha256:${bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", body)))}`;
-  const existing = await beginDelivery(env.DB, deliveryId, digest);
+  const journal = new D1DeliveryJournal(env.DB);
+  const existing = await journal.begin(deliveryId, digest, receivedAt);
   if (existing?.status === "completed") {
-    return JSON.parse(existing.decision_json);
-  }
-  if (existing?.status === "processing") {
-    throw new ReleaseWardenError("delivery is already processing", 409);
+    return JSON.parse(existing.receipt_json);
   }
 
   try {
     const payload = JSON.parse(new TextDecoder().decode(body));
     const deployment = parseDeploymentRequest(payload, deliveryId);
-    const token = await installationToken(env, deployment);
+    const token = await dependencies.installationToken(env, deployment);
+    let policy = null;
+    let observations = [];
+    let mandate = null;
+    let policyDigest = null;
+    let continuity = { valid: false, code: "authority_evidence_unavailable", details: {} };
     let decision;
     try {
-      const policy = await repositoryPolicy(deployment, token);
-      const observations = await checkRuns(deployment, token);
-      decision = evaluateRelease(deployment, policy, observations);
-    } catch (error) {
-      // Shadow mode releases GitHub while preserving a clear fail-closed hypothesis.
-      if (!(error instanceof ReleaseWardenError)) throw error;
-      decision = {
-        schema: "releasewarden.decision.v1",
-        state: "rejected",
-        gate_action: "escalate",
-        reason: error.message,
-        mode: "shadow",
-        repository: `${deployment.owner}/${deployment.repository}`,
-        environment: deployment.environment,
+      const rawPolicy = await dependencies.repositoryPolicy(deployment, token);
+      policy = validatePolicy(rawPolicy);
+      observations = await dependencies.checkRuns(deployment, token);
+      const artifact = await dependencies.fetchMandateArtifact(deployment, token);
+      mandate = validateMandate(artifact.mandate, now);
+      policyDigest = await sha256Digest(policy);
+      const effectDocument = {
+        schema: "releasewarden.effect.v1",
         sha: deployment.sha,
-        evidence: [],
-        diagnostics: { policy_id: "unavailable" },
+        mandate_id: mandate.mandate_id,
+        policy_digest: policyDigest,
       };
+      continuity = evaluateContinuity(deployment, mandate, {
+        effectKind: env.CROSSING_EFFECT_KIND,
+        destination: env.CROSSING_DESTINATION,
+        artifactDigest: await sha256Digest(`${canonicalJson(effectDocument)}\n`),
+        policyDigest,
+        now,
+      });
+      decision = continuity.valid ? evaluateRelease(deployment, policy, observations) :
+        continuityDecision(deployment, policy, continuity);
+    } catch {
+      decision = unavailableDecision(deployment);
     }
-    await githubJson(deployment.callbackUrl, token, {
+    await dependencies.githubJson(deployment.callbackUrl, token, {
       method: "POST", body: JSON.stringify(callbackBody(deployment, decision)),
     });
-    await env.DB.prepare(
-      "UPDATE deliveries SET status = 'completed', decision_json = ?1, completed_at = ?2 " +
-      "WHERE delivery_id = ?3 AND status = 'processing'",
-    ).bind(JSON.stringify(decision), new Date().toISOString(), deliveryId).run();
-    return decision;
+    const callbackAt = dependencies.now().toISOString();
+    const receipt = await buildDecisionReceipt(
+      deployment, mandate, policy, observations, continuity, decision, { receivedAt, callbackAt },
+    );
+    await journal.complete(deliveryId, {
+      decision, receipt, mandateId: mandate?.mandate_id ?? null,
+      nonceDigest: mandate ? await sha256Digest(mandate.nonce) : null, policyDigest,
+      completedAt: callbackAt,
+    });
+    return receipt;
   } catch (error) {
-    await env.DB.prepare(
-      "UPDATE deliveries SET status = 'failed', completed_at = ?1 " +
-      "WHERE delivery_id = ?2 AND status = 'processing'",
-    ).bind(new Date().toISOString(), deliveryId).run();
+    await journal.fail(deliveryId, dependencies.now().toISOString());
     throw error;
   }
 }

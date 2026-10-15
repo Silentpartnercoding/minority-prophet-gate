@@ -127,9 +127,11 @@ function mismatch(code, field) {
 }
 
 export function evaluateContinuity(deployment, mandate, context) {
+  const deploymentRepository = deployment.owner ?
+    `${deployment.owner}/${deployment.repository}` : deployment.repository;
   const bindings = [
     [deployment.repositoryId, mandate.repository.id, "repository_id_mismatch", "repository.id"],
-    [deployment.repository, mandate.repository.full_name, "repository_mismatch", "repository.full_name"],
+    [deploymentRepository, mandate.repository.full_name, "repository_mismatch", "repository.full_name"],
     [deployment.sha, mandate.sha, "sha_mismatch", "sha"],
     [deployment.runId, mandate.workflow.run_id, "run_id_mismatch", "workflow.run_id"],
     [deployment.runAttempt, mandate.workflow.run_attempt, "run_attempt_mismatch", "workflow.run_attempt"],
