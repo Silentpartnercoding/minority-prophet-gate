@@ -1,0 +1,190 @@
+name: releasewarden-real-crossing
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  checks: read
+
+concurrency:
+  group: releasewarden-real-crossing
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the protected main branch
+        env:
+          SUBJECT_REF: ${{ github.ref }}
+        run: |
+          if [ "$SUBJECT_REF" != "refs/heads/main" ]; then
+            echo "The real crossing runs only from refs/heads/main." >&2
+            exit 2
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Wait for exact-commit evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SUBJECT_SHA: ${{ github.sha }}
+        run: |
+          required='["test (3.10)","test (3.11)","test (3.12)","package","semgrep-cloud-platform/scan"]'
+          for attempt in $(seq 1 18); do
+            curl --fail --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPOSITORY}/commits/${SUBJECT_SHA}/check-runs?filter=latest&per_page=100" \
+              > /tmp/releasewarden-check-runs.json
+            ready=$(jq --argjson required "$required" '
+              [.check_runs[] | select(.name as $name | $required | index($name))]
+              | group_by(.name) | map(sort_by(.id) | last)
+              | (length == ($required | length))
+                and all(.status == "completed")
+                and all(.conclusion == "success")
+            ' /tmp/releasewarden-check-runs.json)
+            if [ "$ready" = true ]; then break; fi
+            if [ "$attempt" = 18 ]; then
+              echo "Exact-commit evidence did not complete successfully before the bounded timeout." >&2
+              exit 2
+            fi
+            sleep 10
+          done
+          jq '[.check_runs[]
+            | select(.name == "test (3.10)" or .name == "test (3.11)"
+                  or .name == "test (3.12)" or .name == "package"
+                  or .name == "semgrep-cloud-platform/scan")
+            | {name, status, conclusion, app_slug: .app.slug, check_run_id: .id}
+          ] | group_by(.name) | map(sort_by(.check_run_id) | last)' \
+            /tmp/releasewarden-check-runs.json > /tmp/releasewarden-selected-checks.json
+
+      - name: Create the run-scoped Mandate
+        env:
+          REPOSITORY_ID: ${{ github.repository_id }}
+          REPOSITORY: ${{ github.repository }}
+          SUBJECT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          EFFECT_URL: ${{ vars.RELEASEWARDEN_FIXTURE_URL }}
+        run: |
+          test -n "$EFFECT_URL"
+          jq -n \
+            --argjson repository_id "$REPOSITORY_ID" \
+            --arg repository "$REPOSITORY" \
+            --arg sha "$SUBJECT_SHA" \
+            --argjson run_id "$RUN_ID" \
+            --argjson run_attempt "$RUN_ATTEMPT" \
+            --arg destination "$EFFECT_URL" \
+            '{
+              repository_id: $repository_id,
+              repository: $repository,
+              sha: $sha,
+              run_id: $run_id,
+              run_attempt: $run_attempt,
+              environment: "releasewarden-sandbox",
+              effect_kind: "cloudflare-worker-fixture",
+              destination: $destination
+            }' > /tmp/releasewarden-context.json
+          node scripts/releasewarden-crossing.mjs create \
+            --context /tmp/releasewarden-context.json \
+            --policy .releasewarden.json \
+            --out releasewarden-crossing
+          cp /tmp/releasewarden-selected-checks.json releasewarden-crossing/checks.json
+
+      - name: Upload the single-file Mandate transport
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: releasewarden-mandate-v1
+          path: releasewarden-crossing/mandate.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Upload sanitized build inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: releasewarden-crossing-build-v1
+          path: |
+            releasewarden-crossing/effect.json
+            releasewarden-crossing/manifest.json
+            releasewarden-crossing/checks.json
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy-and-observe:
+    needs: prepare
+    runs-on: ubuntu-latest
+    environment: releasewarden-sandbox
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Download sanitized build inputs
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: releasewarden-crossing-build-v1
+          path: releasewarden-crossing
+
+      - name: Install the pinned fixture toolchain
+        working-directory: cloudflare/releasewarden-crossing-fixture
+        run: npm ci
+
+      - name: Deploy only the harmless fixture
+        working-directory: cloudflare/releasewarden-crossing-fixture
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.RELEASEWARDEN_CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.RELEASEWARDEN_CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          manifest="${GITHUB_WORKSPACE}/releasewarden-crossing/manifest.json"
+          sha=$(jq -r .sha "$manifest")
+          mandate_id=$(jq -r .mandate_id "$manifest")
+          policy_digest=$(jq -r .policy_digest "$manifest")
+          artifact_digest=$(jq -r .artifact_digest "$manifest")
+          npx wrangler deploy \
+            --var "SUBJECT_SHA:${sha}" \
+            --var "MANDATE_ID:${mandate_id}" \
+            --var "POLICY_DIGEST:${policy_digest}" \
+            --var "ARTIFACT_DIGEST:${artifact_digest}"
+
+      - name: Read back and verify the external effect
+        env:
+          EFFECT_URL: ${{ vars.RELEASEWARDEN_FIXTURE_URL }}
+        run: |
+          test -n "$EFFECT_URL"
+          mkdir releasewarden-crossing-result
+          curl --fail --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -H "Accept: application/json" \
+            "$EFFECT_URL" > releasewarden-crossing-result/response.json
+          node scripts/releasewarden-crossing.mjs verify \
+            --manifest releasewarden-crossing/manifest.json \
+            --response releasewarden-crossing-result/response.json \
+            --url "$EFFECT_URL" \
+            --out releasewarden-crossing-result/receipt.json
+          cp releasewarden-crossing/manifest.json releasewarden-crossing-result/manifest.json
+          cp releasewarden-crossing/checks.json releasewarden-crossing-result/checks.json
+
+      - name: Report the three separate outcomes
+        run: |
+          {
+            echo "## ReleaseWarden real crossing"
+            echo
+            echo "- Hosted Gate: evaluated and journaled privately by ReleaseWarden."
+            echo "- GitHub outcome: this job was released by the shadow approval callback."
+            echo "- External effect: verified by HTTPS read-back against the exact manifest."
+            echo "- Subject SHA: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sanitized result bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: releasewarden-crossing-result-v1
+          path: releasewarden-crossing-result/
+          if-no-files-found: error
+          retention-days: 7

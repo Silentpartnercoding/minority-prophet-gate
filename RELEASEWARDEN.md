@@ -235,3 +235,30 @@ must pin policy to a protected control-plane revision or external policy store.
 `ReleaseWarden` is the commercial product name used by this adapter.
 `Minority Prophet` remains the evidence method and research identity. This is a
 preliminary name choice, not trademark clearance.
+
+## Real crossing v0.1
+
+The next milestone is implemented as a manual, main-branch-only sandbox
+workflow in `.github/workflows/releasewarden-crossing.yml`. It carries one
+run-scoped Mandate through a GitHub Actions artifact, lets the hosted GitHub App
+evaluate exact-SHA evidence, deploys a read-only Cloudflare fixture after
+GitHub's shadow callback, and verifies the returned effect.
+
+Keep these results separate:
+
+- **Gate** is ReleaseWarden's hypothetical `proceed`, `block`, `escalate`, or
+  `review` decision.
+- **GitHub** is actually released in this preview because the hosted callback
+  remains shadow-only.
+- **Read-back** proves only what the harmless fixture returned over HTTPS.
+
+The workflow does not prove production enforcement, arbitrary semantic
+equivalence, or that Semgrep and GitHub Actions are organizationally independent.
+It requires the repository variable `RELEASEWARDEN_FIXTURE_URL` and the two
+environment secret names documented in
+`docs/releasewarden-crossing-operator-checklist.md`. Never place their values in
+the repository.
+
+Complete the operator checklist before enabling the custom rule. Run the valid
+case first, then the frozen wrong-SHA, policy mutation, failed-check, replay, and
+returned-body vectors. Label offline vectors honestly.

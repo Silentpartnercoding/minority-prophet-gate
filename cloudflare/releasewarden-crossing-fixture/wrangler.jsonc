@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "releasewarden-crossing-fixture",
+  "main": "src/index.mjs",
+  "preview_urls": false,
+  "compatibility_date": "2026-10-15",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
